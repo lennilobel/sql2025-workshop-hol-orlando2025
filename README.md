@@ -16,7 +16,7 @@ Before diving into the hands-on labs, ensure you have the necessary software and
 
       - Choose the **Basic** option when the installer starts.
 
-    - **Option 2: Local installation with Docker (Linux Container on for Windows)**
+    - **Option 2: Local installation with Docker (Linux Container on Windows)**
     
       - Pull the latest SQL Server 2025 container image:
       
@@ -26,7 +26,7 @@ Before diving into the hands-on labs, ensure you have the necessary software and
 
     - **Option 3: Azure SQL Database**  
     
-      - Alternatively, you may use an Azure SQL Database if you prefer a cloud-hosted environment. All labs are compatible.
+      - Alternatively, you may use an Azure SQL Database if you prefer a cloud-hosted environment and you have an Azure subscription. All labs are compatible.
 
 2. **SQL Server Management Studio (SSMS) 21**
 
@@ -50,7 +50,7 @@ Before diving into the hands-on labs, ensure you have the necessary software and
 
     * **Option 1: SQL Server 2025 on Windows**
 
-    If you're running SQL Server 2025 directly on Windows:
+      If you're running SQL Server 2025 directly on Windows:
 
       * **Create a folder:**  
    Create a folder on your C: drive called `C:\HolDB`.
