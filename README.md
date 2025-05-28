@@ -96,6 +96,44 @@ Before diving into the hands-on labs, ensure you have the necessary software and
                 MOVE 'AdventureWorks2022_log' TO '/var/opt/mssql/data/AdventureWorks2022_log.ldf';
            ```
 
+    * **Option 3: Azure SQL Database**
+
+      Azure SQL Database does **not** support restoring `.bak` files directly. To load **AdventureWorks2022**, follow these steps using a **DACPAC**:
+
+        1. **Download the AdventureWorks2022 DACPAC**
+
+           * From the official Microsoft sample GitHub:
+             [https://github.com/microsoft/sql-server-samples/releases/tag/adventureworks](https://github.com/microsoft/sql-server-samples/releases/tag/adventureworks)
+
+           * Download the file named:
+             `AdventureWorks2022.bacpac`
+             *(Note: Sometimes DACPAC and BACPAC are both offered. You want the `.bacpac` file for Azure SQL.)*
+
+        2. **Create an Azure SQL Database**
+
+           * In the [Azure Portal](https://portal.azure.com), create a new **Azure SQL Database** (Standard S1 or better is recommended).
+           * Choose an existing or new **SQL Server** resource, and create admin credentials.
+
+        3. **Import the BACPAC into Azure SQL Database**
+
+           * In the Azure Portal:
+
+             * Go to your **SQL Server** resource.
+             * Under **Settings**, select **Import database**.
+             * For **Storage**, select the `.bacpac` file you downloaded earlier (you may need to upload it to a storage container first).
+             * Fill in the target database name, pricing tier, and credentials.
+
+           * Alternatively, you can use **SQL Server Management Studio (SSMS)**:
+
+             * Right-click on **Databases** > **Import Data-tier Application...**
+             * Follow the wizard to import the `.bacpac` into your Azure SQL Database.
+
+        4. **Connect to your Azure SQL Database in SSMS**
+
+           * Use the **fully qualified server name** (e.g., `yourserver.database.windows.net`).
+           * Use the SQL admin login and password you created.
+           * You should now see the restored **AdventureWorks2022** database ready for use in the lab.
+
 ---
 
 ## You're all set.
