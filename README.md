@@ -46,17 +46,23 @@ Before diving into the hands-on labs, ensure you have the necessary software and
 
 4. **AdventureWorks2022 Database**
  
-   Many labs utilize the AdventureWorks2022 sample database. Download the `AventureWorks2022.bak` backup file available [here](https://1drv.ms/f/s!AiiTRkT0Yvc4xd8Kz1oSgzjbselEIA?e=yFaqjc) (right-click and open in a new tab)
+   Many labs utilize the AdventureWorks2022 sample database. 
 
     * **Option 1: SQL Server 2025 on Windows**
 
       If you're running SQL Server 2025 directly on Windows:
 
+      * **Download the backup file:**
+      
+        Download the `AventureWorks2022.bak` backup file available [here](https://1drv.ms/f/s!AiiTRkT0Yvc4xd8Kz1oSgzjbselEIA?e=yFaqjc) (right-click and open in a new tab)
+
       * **Create a folder:**  
-   Create a folder on your C: drive called `C:\HolDB`.
+        
+        Create a folder on your C: drive called `C:\HolDB`.
 
       * **Copy the backup file:**  
-           Move `AdventureWorks2022.bak` from your Downloads folder into `C:\HolDB`.
+        
+        Move `AdventureWorks2022.bak` from your Downloads folder into `C:\HolDB`.
 
       * **Restore in SSMS:**
            - Launch SSMS and connect to your local SQL Server instance.
@@ -69,8 +75,13 @@ Before diving into the hands-on labs, ensure you have the necessary software and
 
       If you're using SQL Server 2025 inside a Linux-based Docker container on Windows:
 
+      * **Download the backup file:**
+      
+        Download the `AventureWorks2022.bak` backup file available [here](https://1drv.ms/f/s!AiiTRkT0Yvc4xd8Kz1oSgzjbselEIA?e=yFaqjc) (right-click and open in a new tab)
+
       * **Create a shared folder:**  
-   Create a host folder (e.g., `C:\Temp`) and copy `AdventureWorks2022.bak` into it.
+
+        Create a host folder (e.g., `C:\Temp`) and copy `AdventureWorks2022.bak` into it.
 
       * **Start the SQL Server container:**
         ```powershell
