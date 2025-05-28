@@ -1,30 +1,22 @@
 ﻿# T-SQL Enhancements
 
-In this section, you will learn all the major T-SQL enhancements introduced in SQL Server 2022. These include brand new T-SQL functions, as well as enhancements to several existing T-SQL functions.
+In this section, you will explore the most exciting new T-SQL features introduced in SQL Server 2025. These enhancements expand the language in powerful ways—adding support for Unicode string handling, fuzzy and pattern-based matching, and a brand-new aggregate function.
 
 Labs in this section cover the following T-SQL enhancements:
 
-- **DATE_BUCKET**: Returns the date corresponding to the start of each bucket.
+* **UNISTR**: Returns a Unicode string constructed from a string of Unicode code points.
 
-- **DATETRUNC**: Return a datetime truncated to any part.
+* **ANSI String Concatenation (`||`)**: Introduces the ANSI standard operator for string concatenation, which offers consistent behavior with automatic type conversion and NULL handling.
 
-- **LEAST and GREATEST**: Returns the minimum or maximum value across columns.
+* **Fuzzy Matching Functions**: Includes `EDIT_DISTANCE`, `EDIT_DISTANCE_SIMILARITY`, `JARO_WINKLER_DISTANCE`, and `JARO_WINKLER_SIMILARITY` for comparing string similarity and supporting error-tolerant string matching scenarios.
 
-- **STRING_SPLIT ordinal**: Returns the ordinal of each split element.
+* **Regular Expression Functions**: Adds a full suite of `REGEXP_...` functions including `REGEXP_LIKE`, `REGEXP_INSTR`, `REGEXP_SUBSTR`, `REGEXP_REPLACE`, `REGEXP_COUNT`, `REGEXP_SPLIT_TO_TABLE`, and `REGEXP_MATCHES`—bringing powerful pattern-matching capabilities to T-SQL.
 
-- **GENERATE_SERIES**: Generates a number series resultset.
-
-- **TRIM enhancements**: Provides greater control over leading and trailing characters to trim.
-
-- **IS [NOT] DISTINCT FROM**: Provids a NULL-safe equality check.
-
-- **Windowing enhancements**: SELECT…WINDOW, and FIRST_VALUE/LAST_VALUE enhancements.
-
-- **Bit functions**: Bit masking and bit manipulation.
+* **PRODUCT**: A new aggregate function that returns the product of all values (or distinct values) in a numeric expression.
 
 The labs in this section are independent of one another, so it is not necessary to work through every one of them. You can choose to work through these labs in any order you prefer, focusing on those that interest you more first, and them exploring the others later.
 
 ___
 
-▶ [Lab: T-SQL Enhancements - DATE_BUCKET](https://github.com/lennilobel/sql2022-workshop-hol-vegas2025/blob/master/HOL/1.%20T-SQL%20Enhancements/1.%20DATE_BUCKET.md)
+▶ [Lab: T-SQL Enhancements - UNISTR](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/blob/main/HOL/1.%20T-SQL%20Enhancements/1.%20UNISTR.md)
 
