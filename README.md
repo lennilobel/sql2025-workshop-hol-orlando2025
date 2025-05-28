@@ -61,4 +61,4 @@ Before diving into the hands-on labs, ensure you have the necessary software and
 
 Ready to dive in?
 
-▶ [Let's get started!](https://github.com/lennilobel/sql2022-workshop-hol-vegas2025/tree/master/HOL)
+▶ [Let's get started!](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/blob/main/HOL)
