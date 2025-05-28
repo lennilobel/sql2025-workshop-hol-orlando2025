@@ -4,59 +4,80 @@
 
 Welcome!
 
-Before diving into the hands-on labs, ensure you have the necessary software and databases installed. Follow these steps to set up your environment:
+Before diving into the hands-on labs, ensure you have the necessary software and sample database installed. Follow the steps below to prepare your environment.
 
-1. **SQL Server 2025**: A local instance of SQL Server 2025 is required for the labs. The Developer Edition of SQL Server 2022 is free for development and testing, not for production, and includes all the features of SQL Server 2022. Download and install it from [Microsoft's SQL Server Downloads page](https://www.microsoft.com/en-us/sql-server/sql-server-downloads) (right-click and open in a new tab). When the installer starts, choose the **Basic** installation option.
+1. **SQL Server 2025**: A local or cloud-hosted instance of **SQL Server 2025** is required for the labs. You have two options:
 
-2. **SQL Server Management Studio (SSMS)**: To interact with SQL Server, including running queries and managing databases, install the latest version of SSMS. Download SSMS from [here](https://aka.ms/ssmsfullsetup) (right-click and open in a new tab).
+    - **Local installation (Windows or Docker for Windows):**  
+    Download SQL Server 2025 Developer Edition (free) from:<br>
+      [https://info.microsoft.com/ww-landing-sql-server-2025.html](https://info.microsoft.com/ww-landing-sql-server-2025.html)  
+  Choose the **Basic** option when the installer starts.
 
-3. **Visual Studio 2022 (any edition) with .NET desktop development workload**: The Row-Level Security lab requires Visual Studio 2022. The Community Edition is free for students, open-source contributors, and individuals. Download it from [Visual Studio's Community Edition page](https://visualstudio.microsoft.com/vs/community/) (right-click and open in a new tab). During installation, choose the ".NET desktop development workload."
+    - **Azure SQL Database:**  
+  Alternatively, you may use an Azure SQL Database if you prefer a cloud-hosted environment. All labs are compatible.
 
-4. **AdventureWorks2019 Database**: Many demos utilize the AdventureWorks2019 sample database. Download the `AdventureWorks2019.bak` backup file available [here](https://1drv.ms/f/s!AiiTRkT0Yvc4xd8Kz1oSgzjbselEIA?e=yFaqjc) (right-click and open in a new tab).
+2. **SQL Server Management Studio (SSMS) 21**: To interact with SQL Server, including running queries and managing databases, install the latest version of SSMS.
 
-   Then restore the backup file as follows:
+    - Download SSMS from:  
+[https://aka.ms/ssms/21/release/vs_SSMS.exe](https://aka.ms/ssms/21/release/vs_SSMS.exe)
 
-   -  **Create a temporary folder**
-    First, create a temporary folder on your C drive to store the `.bak` file during the restoration process. In File Explorer, navigate to the C drive (C:\). Then right-click in an empty space, select **New > Folder**, and name the new folder `HolDB`.
+3. **Visual Studio 2022 (any edition)** is required for the Change Event Streaming labs. 
 
-   - **Copy the backup file**
-     Navigate to your Downloads folder. Right-click on the `AdventureWorks2019.bak` file and select **Copy**. Then go back to the `C:\HolDB` folder, right-click in an empty space, and select **Paste**.
+    - Download the **Community Edition** (free) from:  
+  [https://visualstudio.microsoft.com/vs/community/](https://visualstudio.microsoft.com/vs/community/)
 
-   - **Restore the Database using SSMS**
-    Now that the backup file is in an accessible location, you can proceed with restoring it to your SQL Server instance.
+    - During installation, select the **.NET Desktop Development** workload.
 
-      1. Open SQL Server Management Studio (SSMS) and connect to your local SQL Server instance.
-      2. In the Object Explorer on the left, expand and then right-click on the Databases folder and select **Restore Database...**
-      2. In the Restore Database Dialog, select the **Device** radio button under the **Source** section.
-      3. Click the `...` button on the right to open the Select Backup Devices dialog.
-      4. Click on the **Add** button to open the Locate Backup File dialog.
-      5. Navigate to the `C:\HolDB` folder and select the `AdventureWorks2019.bak` file, then click OK.
-      6. The backup file should now appear in the Select Backup Devices dialog. Click OK to return to the Restore Database dialog.
-      7. Now click OK to start the restore process.
+4. **AdventureWorks2022 Database**: Many labs utilize the AdventureWorks2022 sample database. Download the `AventureWorks2022.bak` backup file available [here](https://1drv.ms/f/s!AiiTRkT0Yvc4xd8Kz1oSgzjbselEIA?e=yFaqjc) (right-click and open in a new tab)
 
-   The restoration process will begin, and SSMS will display a progress bar. Once the process completes, a message will appear informing you that the database has been successfully restored. Click OK, and the AdventureWorks2019 database will appear in the Databases folder in Object Explorer.
+    * **Option A: SQL Server 2025 on Windows**
 
-5. **Wide World Importers Database**: One lab uses the Wide World Importers sample database. Download the `WideWorldImporters.bak` backup file file available [here](https://1drv.ms/f/s!AiiTRkT0Yvc4xd8Kz1oSgzjbselEIA?e=yFaqjc) (right-click and open in a new tab).
+      * **Create a folder:**  
+   Create a folder on your C: drive called `C:\HolDB`.
 
-   Then restore the database using similar steps you just followed for AdventureWorks2019:
+      * **Copy the backup file:**  
+           Move `AdventureWorks2022.bak` from your Downloads folder into `C:\HolDB`.
 
-   - **Copy the Backup File**
-    Copy the `WideWorldImports.bak` file from your Downloads folder to the `C:\HolDB` folder.
+      * **Restore in SSMS:**
+           - Launch SSMS and connect to your local SQL Server instance.
+           - Right-click on **Databases** and choose **Restore Database...**
+           - Select **Device**, click `...`, then click **Add**.
+           - Navigate to `C:\HolDB`, select the `.bak` file, and click **OK**.
+           - Click **OK** again to start the restore.
 
-   - **Restore the Database using SSMS**
+    * **Option B: SQL Server 2025 with Docker (Linux Container on Windows)**
 
-      1. In the SSMS Object Explorer, right-click on the Databases folder and select **Restore Database...**
-      2. In the Restore Database Dialog, select the **Device** radio button under the **Source** section.
-      3. Click the `...` button on the right to open the Select Backup Devices dialog.
-      4. Click on the **Add** button to open the Locate Backup File dialog.
-      5. Navigate to the `C:\HolDB` folder and select the `WideWorldImports.bak` file, then click OK to return to the Select Backup Devices dialog.
-      6. Click OK to return to the Restore Database dialog.
-      7. Click OK to start the restore process.
+      If you're using SQL Server 2025 inside a Linux-based Docker container on Windows:
 
-   After the restore completes successfully, the WideWorldImporters database will appear in the Databases folder in Object Explorer.
+      * **Create a shared folder:**  
+   Create a host folder (e.g., `C:\Temp`) and copy `AdventureWorks2022.bak` into it.
 
-   You can now delete the `C:\HolDB` folder, as well as the two database backup files in your Downloads folder.
- 
+      * **Start the SQL Server container:**
+        ```powershell
+        docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=<your-sa-password>" -p 1433:1433 -v C:\Temp:/var/opt/mssql/backup --name sql2025 -d mcr.microsoft.com/mssql/server:2025-latest
+        ```
+
+      * **Restore in SSMS:**
+
+        - Launch SSMS.
+        - Connect to `localhost,1433`.
+        - Right-click on **Databases** and choose **Restore Database...**
+        - Select **Device**, click `...`, then click **Add**.
+        - Navigate to `/var/opt/mssql/backup/AdventureWorks2022.bak`
+        - Click **OK** twice to return to the main restore dialog.
+        - Click **OK** to begin the restore.
+
+      * **Alternatively, restore using T-SQL:**
+
+           ```sql
+           RESTORE DATABASE AdventureWorks2022
+           FROM DISK = N'/var/opt/mssql/backup/AdventureWorks2022.bak'
+           WITH MOVE 'AdventureWorks2022' TO '/var/opt/mssql/data/AdventureWorks2022.mdf',
+                MOVE 'AdventureWorks2022_log' TO '/var/opt/mssql/data/AdventureWorks2022_log.ldf';
+           ```
+
+---
+
 ## You're all set.
 
 Ready to dive in?
