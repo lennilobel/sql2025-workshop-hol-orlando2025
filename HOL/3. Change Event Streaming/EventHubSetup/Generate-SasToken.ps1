@@ -4,16 +4,16 @@
 function Generate-SasToken {
 # Provide values for following resources.
 #
-$subscriptionId = "6327c571-12f0-4634-9d3e-404ad37e6be9"
-$resourceGroupName = "demos-rg"
-$namespaceName = "sql2025-ces"
-$eventHubName = "ces-hub"
-$policyName = "ces-policy"
+$subscriptionId     = "6327c571-12f0-4634-9d3e-404ad37e6be9"
+$resourceGroupName  = "demos-rg"
+$namespaceName      = "sql2025-ces"
+$eventHubName       = "ces-hub"
+$policyName         = "ces-policy"
 
 # No need to modify rest of the script.
 
 # Login to Azure and set Azure Subscription.
-Connect-AzAccount -TenantId d094d040-1e16-4c87-9d7e-ba1b8efa9b29
+Connect-AzAccount
 
 # Get current context and check subscription
 $currentContext = Get-AzContext
