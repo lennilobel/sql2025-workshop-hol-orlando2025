@@ -13,6 +13,8 @@ Before diving into the hands-on labs, ensure you have the necessary software and
     - **Option 1: Local installation on Windows**  
 
       - Download SQL Server 2025 Developer Edition (free) from: [https://info.microsoft.com/ww-landing-sql-server-2025.html](https://info.microsoft.com/ww-landing-sql-server-2025.html)  
+      
+        - Direct download: https://www.microsoft.com/en-us/evalcenter/sql-server-2025-download
 
       - Choose the **Basic** option when the installer starts.
 
