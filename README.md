@@ -39,7 +39,11 @@ Before diving into the hands-on labs, ensure you have the necessary software and
 
 3. **Visual Studio 2022 (any edition)**
 
-   Visual Studio 2022 is required for the Change Event Streaming labs. 
+   Visual Studio 2022 is required for the Change Event Streaming labs.
+ 
+   If you already have Visual Studio 2022 installed on your machine, be sure that you have chosen the **.NET Desktop Development** workload during installation. You can confirm this from the Visual Studio Installer (and add the workload if necessary).
+
+   If you don't already have Visual Studio 2022 installed on your machine:
 
     - Download the **Community Edition** (free) from:  
   [https://visualstudio.microsoft.com/vs/community/](https://visualstudio.microsoft.com/vs/community/)
@@ -70,8 +74,8 @@ Before diving into the hands-on labs, ensure you have the necessary software and
            - Launch SSMS and connect to your local SQL Server instance.
            - Right-click on **Databases** and choose **Restore Database...**
            - Select **Device**, click `...`, then click **Add**.
-           - Navigate to `C:\HolDB`, select the `.bak` file, and click **OK**.
-           - Click **OK** again to start the restore.
+           - Navigate to `C:\HolDB`, select the `.bak` file, and click **OK** twice.
+           - Click **OK** once more to start the restore.
 
     * **Option 2: SQL Server 2025 with Docker (Linux Container on Windows)**
 

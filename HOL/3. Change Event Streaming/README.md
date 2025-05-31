@@ -17,4 +17,4 @@ This hands-on lab demonstrates the new **Change Event Streaming (CES)** feature 
 * A blob storage account and container
 * A SAS token (shared separately)
 
-> **Note:** If you wish to run these labs after the training event, the instructor-provisioned pre-requisite resources will no longer be available. Instead, you will need to provision these resources in your Azure subscription. Refer to [Configure change event streaming](https://learn.microsoft.com/en-us/sql/relational-databases/track-changes/change-event-streaming/configure?view=sql-server-ver17) in the CES documentation.
+> **Note:** If you wish to run these labs after the training event, the instructor-provisioned pre-requisite resources will not be available. Instead, you will need to provision these resources in your Azure subscription. For details, refer to [Configure change event streaming](https://learn.microsoft.com/en-us/sql/relational-databases/track-changes/change-event-streaming/configure?view=sql-server-ver17) in the CES documentation.
