@@ -4,7 +4,7 @@
 function Generate-SasToken {
 # Provide values for following resources.
 #
-$subscriptionId     = "6327c571-12f0-4634-9d3e-404ad37e6be9"
+$subscriptionId     = ""
 $resourceGroupName  = "demos-rg"
 $namespaceName      = "sql2025-ces"
 $eventHubName       = "ces-hub"
@@ -17,12 +17,12 @@ Connect-AzAccount
 
 # Get current context and check subscription
 $currentContext = Get-AzContext
-if ($currentContext.Subscription.Id -ne $subscriptionId) {
-    Write-Host "Current subscription is $($currentContext.Subscription.Id), switching to $subscriptionId..."
-    Set-AzContext -SubscriptionId $subscriptionId | Out-Null
-} else {
-    Write-Host "Already using subscription $subscriptionId."
-}
+#if ($currentContext.Subscription.Id -ne $subscriptionId) {
+#    Write-Host "Current subscription is $($currentContext.Subscription.Id), switching to $subscriptionId..."
+#    Set-AzContext -SubscriptionId $subscriptionId | Out-Null
+#} else {
+#    Write-Host "Already using subscription $subscriptionId."
+#}
 
 # Try to get the authorization policy (it should have Send rights)
 $rights = @("Send")
