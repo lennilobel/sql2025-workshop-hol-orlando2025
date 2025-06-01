@@ -13,4 +13,10 @@
     <PackageReference Include="Azure.ResourceManager.EventHubs" Version="1.1.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Students.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

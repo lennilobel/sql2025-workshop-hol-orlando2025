@@ -21,7 +21,7 @@ class Program
 	static async Task Main()
 	{
 		var currentDir = AppContext.BaseDirectory;
-		var studentsFilePath = Path.Combine(currentDir, "ManageEventHubConsumerGroups-students.txt");
+		var studentsFilePath = Path.Combine(currentDir, "Students.txt");
 
 		if (!File.Exists(studentsFilePath))
 		{
@@ -35,7 +35,9 @@ class Program
 			.Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith("#"))
 			.ToList();
 
-		var armClient = new ArmClient(new DefaultAzureCredential());
+		var credential = new AzureCliCredential(); // or new VisualStudioCredential()
+		var armClient = new ArmClient(credential);
+		//var armClient = new ArmClient(new DefaultAzureCredential());
 
 		try
 		{
@@ -94,7 +96,7 @@ class Program
 	static async Task<List<string>> GetConsumerGroupNames()
 	{
 		var list = new List<string>();
-		await foreach (var group in EventHubResource.GetEventHubConsumerGroups().GetAllAsync())
+		await foreach (var group in EventHubResource.GetEventHubsConsumerGroups().GetAllAsync())
 		{
 			list.Add(group.Data.Name);
 		}
@@ -130,7 +132,7 @@ class Program
 			{
 				Console.ForegroundColor = ConsoleColor.Green;
 				Console.WriteLine($"Creating Consumer Group: {name}");
-				await EventHubResource.GetEventHubConsumerGroups().CreateOrUpdateAsync(WaitUntil.Completed, name, new EventHubConsumerGroupData());
+				await EventHubResource.GetEventHubsConsumerGroups().CreateOrUpdateAsync(WaitUntil.Completed, name, new EventHubsConsumerGroupData());
 				count++;
 			}
 		}
@@ -154,7 +156,7 @@ class Program
 			{
 				Console.ForegroundColor = ConsoleColor.Green;
 				Console.WriteLine($"Deleting Consumer Group: {name}");
-				await EventHubResource.GetEventHubConsumerGroups().Get(name).Value.DeleteAsync(WaitUntil.Completed);
+				await EventHubResource.GetEventHubsConsumerGroups().Get(name).Value.DeleteAsync(WaitUntil.Completed);
 				count++;
 			}
 			else
@@ -173,12 +175,12 @@ class Program
 		var currentSku = NamespaceResource.Data.Sku.Name;
 		Console.WriteLine($"\nToggling pricing tier for Event Hub Namespace '{NamespaceName}' (Current Tier: {currentSku})");
 
-		if (currentSku.Equals("Standard", StringComparison.OrdinalIgnoreCase))
+		if (currentSku == "Standard")
 		{
 			Console.ForegroundColor = ConsoleColor.Yellow;
 			Console.WriteLine("Current tier is Standard. Preparing to downgrade to Basic...");
 
-			await foreach (var group in EventHubResource.GetEventHubConsumerGroups().GetAllAsync())
+			await foreach (var group in EventHubResource.GetEventHubsConsumerGroups().GetAllAsync())
 			{
 				if (group.Data.Name != "$Default")
 				{
@@ -189,13 +191,20 @@ class Program
 			}
 
 			Console.WriteLine("Updating tier to Basic...");
-			await NamespaceResource.SetSkuAsync(new EventHubsSku("Basic"));
+
+			var data = NamespaceResource.Data;
+			data.Sku = new EventHubsSku("Basic");
+			NamespaceResource = await NamespaceResource.UpdateAsync(data);
 		}
-		else if (currentSku.Equals("Basic", StringComparison.OrdinalIgnoreCase))
+		else if (currentSku == "Basic")
 		{
 			Console.ForegroundColor = ConsoleColor.Green;
 			Console.WriteLine("Current tier is Basic. Upgrading to Standard...");
-			await NamespaceResource.SetSkuAsync(new EventHubsSku("Standard"));
+
+			var data = NamespaceResource.Data;
+			data.Sku = new EventHubsSku("Standard");
+
+			NamespaceResource = await NamespaceResource.UpdateAsync(data);
 		}
 		else
 		{
