@@ -20,6 +20,7 @@ class Program
 	private static string _resourceGroupName;
 	private static string _namespaceName;
 	private static string _eventHubName;
+	private static int _sasTokenExpirationDays;
 
 	private static List<string> _students;
 	private static EventHubsNamespaceResource _namespaceResource;
@@ -35,6 +36,7 @@ class Program
 		_resourceGroupName = config["EventHub:ResourceGroupName"];
 		_namespaceName = config["EventHub:NamespaceName"];
 		_eventHubName = config["EventHub:EventHubName"];
+		_sasTokenExpirationDays = int.Parse(config["EventHub:SasTokenExpirationDays"]);
 
 		var currentDir = AppContext.BaseDirectory;
 		var studentsFilePath = Path.Combine(currentDir, "Students.txt");
@@ -155,16 +157,17 @@ class Program
 		Console.ForegroundColor = ConsoleColor.White;
 		Console.WriteLine("Azure Subscription Information");
 		Console.ResetColor();
-		Console.WriteLine($"  Subscription Name    : {_subscriptionData.DisplayName}");
-		Console.WriteLine($"  Subscription ID      : {_subscriptionData.SubscriptionId}");
-		Console.WriteLine($"  Tenant ID            : {_subscriptionData.TenantId}");
+		Console.WriteLine($"  Subscription Name     : {_subscriptionData.DisplayName}");
+		Console.WriteLine($"  Subscription ID       : {_subscriptionData.SubscriptionId}");
+		Console.WriteLine($"  Tenant ID             : {_subscriptionData.TenantId}");
 		Console.ForegroundColor = ConsoleColor.White;
 		Console.WriteLine();
 		Console.WriteLine($"Azure Event Hubs Information");
 		Console.ResetColor();
-		Console.WriteLine($"  Resource Group Name  : {_resourceGroupName}");
-		Console.WriteLine($"  Namespace Name       : {_namespaceName}");
-		Console.WriteLine($"  Event Hub Name       : {_eventHubName}");
+		Console.WriteLine($"  Resource Group Name   : {_resourceGroupName}");
+		Console.WriteLine($"  Namespace Name        : {_namespaceName}");
+		Console.WriteLine($"  Event Hub Name        : {_eventHubName}");
+		Console.WriteLine($"  SAS Token Expiration  : {_sasTokenExpirationDays} day(s)");
 		Console.WriteLine();
 	}
 
@@ -398,7 +401,7 @@ class Program
 
 	private static string CreateSasToken(string resourceUri, string keyName, string key)
 	{
-		var expiry = (int)(DateTime.UtcNow.AddMonths(6) - new DateTime(1970, 1, 1)).TotalSeconds;
+		var expiry = (int)(DateTime.UtcNow.AddDays(_sasTokenExpirationDays) - new DateTime(1970, 1, 1)).TotalSeconds;
 
 		var encodedUri = WebUtility.UrlEncode(resourceUri);
 		var stringToSign = $"{encodedUri}\n{expiry}";
@@ -407,7 +410,9 @@ class Program
 		var signature = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(stringToSign)));
 		var encodedSig = WebUtility.UrlEncode(signature);
 
-		return $"SharedAccessSignature sr={encodedUri}&sig={encodedSig}&se={expiry}&skn={keyName}";
+		var sasToken = $"SharedAccessSignature sr={encodedUri}&sig={encodedSig}&se={expiry}&skn={keyName}";
+		
+		return sasToken;
 	}
 
 }
