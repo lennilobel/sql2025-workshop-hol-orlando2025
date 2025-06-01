@@ -1,5 +1,3 @@
-# Manage Event Hub consumer groups per student inside a single Event Hub (Standard tier required)
-
 Connect-AzAccount
 
 $resourceGroup = "demos-rg"
@@ -14,7 +12,17 @@ if (!(Test-Path $studentsFilePath)) {
     exit 1
 }
 
-Write-Host "Manage Event Hub Consumer Groups for HOL Students"
+# Get current pricing tier
+try {
+    $namespace = Get-AzEventHubNamespace -ResourceGroupName $resourceGroup -Name $eventHubNamespaceName
+    $currentSku = $namespace.SkuTier
+}
+catch {
+    Write-Host "ERROR: Could not retrieve Event Hub namespace. Check resource group and namespace name." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "Manage Event Hub Consumer Groups for HOL Students (Current Tier: $currentSku)" -ForegroundColor Cyan
 
 $students = Get-Content $studentsFilePath |
     Where-Object {
@@ -29,10 +37,11 @@ do {
     Write-Host "  L = List all consumer groups"
     Write-Host "  C = Create student consumer groups"
     Write-Host "  D = Delete student consumer groups"
+    Write-Host "  T = Toggle Event Hub pricing tier (Standard <-> Basic)"
     Write-Host "  Q = Quit"
     Write-Host ""
 
-    $mode = Read-Host "Enter choice (S, L, C, D, Q)"
+    $mode = Read-Host "Enter choice (S, L, C, D, T, Q)"
 
     switch ($mode.ToUpper()) {
         "S" {
@@ -78,7 +87,7 @@ do {
                     -ResourceGroupName $resourceGroup `
                     -NamespaceName $eventHubNamespaceName `
                     -EventHubName $eventHubName
-                ).Name
+            ).Name
 
             $createdCount = 0
 
@@ -119,7 +128,7 @@ do {
                     -ResourceGroupName $resourceGroup `
                     -NamespaceName $eventHubNamespaceName `
                     -EventHubName $eventHubName
-                ).Name
+            ).Name
 
             $deletedCount = 0
 
@@ -144,6 +153,58 @@ do {
 
             Write-Host ""
             Write-Host "Total Consumer Groups Deleted: $deletedCount" -ForegroundColor White
+        }
+
+        "T" {
+            Write-Host ""
+            Write-Host "Toggling pricing tier for Event Hub Namespace '$eventHubNamespaceName'..." -ForegroundColor White
+
+            $namespace = Get-AzEventHubNamespace -ResourceGroupName $resourceGroup -Name $eventHubNamespaceName
+            $currentSku = $namespace.SkuTier
+
+            if ($currentSku -eq "Standard") {
+                Write-Host "Current tier is Standard. Preparing to downgrade to Basic..." -ForegroundColor Yellow
+
+                $groupsToDelete = Get-AzEventHubConsumerGroup `
+                    -ResourceGroupName $resourceGroup `
+                    -NamespaceName $eventHubNamespaceName `
+                    -EventHubName $eventHubName |
+                    Where-Object { $_.Name -ne '$Default' }
+
+                foreach ($group in $groupsToDelete) {
+                    Write-Host "Deleting Consumer Group: $($group.Name)" -ForegroundColor Red
+                    Remove-AzEventHubConsumerGroup `
+                        -ResourceGroupName $resourceGroup `
+                        -NamespaceName $eventHubNamespaceName `
+                        -EventHubName $eventHubName `
+                        -Name $group.Name
+                }
+
+                Write-Host "Updating tier to Basic..." -ForegroundColor Yellow
+
+                Set-AzEventHubNamespace `
+                    -ResourceGroupName $resourceGroup `
+                    -Name $eventHubNamespaceName `
+                    -SkuName Basic `
+                    -Location $namespace.Location
+            }
+            elseif ($currentSku -eq "Basic") {
+                Write-Host "Current tier is Basic. Upgrading to Standard..." -ForegroundColor Green
+
+                Set-AzEventHubNamespace `
+                    -ResourceGroupName $resourceGroup `
+                    -Name $eventHubNamespaceName `
+                    -SkuName Standard `
+                    -Location $namespace.Location
+            }
+            else {
+                Write-Host "Unsupported SKU type: $currentSku" -ForegroundColor Red
+            }
+
+            # Refresh and show new tier
+            $namespace = Get-AzEventHubNamespace -ResourceGroupName $resourceGroup -Name $eventHubNamespaceName
+            $currentSku = $namespace.SkuTier
+            Write-Host "Updated pricing tier: $currentSku" -ForegroundColor Cyan
         }
 
         "Q" {
