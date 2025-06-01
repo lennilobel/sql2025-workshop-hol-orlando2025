@@ -16,4 +16,4 @@ The first lab gets you acquainted with text embeddings and vectors. These are fo
 
 ___
 
-▶ [Lab: Vector Search](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/blob/main/HOL/4.%20AI%20Features/1.%20Vector%20Search.md)
+▶ [Lab: Movies Vector Search](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/blob/main/HOL/4.%20AI%20Features/1.%20Movies%20Vector%20Search.md)
