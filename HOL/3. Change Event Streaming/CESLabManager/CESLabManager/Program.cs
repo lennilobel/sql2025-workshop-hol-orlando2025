@@ -9,6 +9,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 
 class Program
@@ -80,13 +83,14 @@ class Program
 			Console.ForegroundColor = ConsoleColor.White;
 			Console.WriteLine("Choose an action");
 			Console.ResetColor();
-			Console.WriteLine("  V = View configuration");
-			Console.WriteLine("  S = Show student list");
-			Console.WriteLine("  L = List all consumer groups");
-			Console.WriteLine("  C = Create student consumer groups");
-			Console.WriteLine("  D = Delete student consumer groups");
+			Console.WriteLine($"  V = View configuration");
+			Console.WriteLine($"  S = Show student list");
+			Console.WriteLine($"  L = List all consumer groups");
+			Console.WriteLine($"  C = Create student consumer groups");
+			Console.WriteLine($"  D = Delete student consumer groups");
 			Console.WriteLine($"  T = Toggle pricing tier ({(_namespaceResource.Data.Sku.Name == "Standard" ? "Standard -> Basic" : "Basic -> Standard")})");
-			Console.WriteLine("  Q = Quit");
+			Console.WriteLine($"  G = Generate SAS access token");
+			Console.WriteLine($"  Q = Quit");
 			Console.WriteLine();
 			Console.Write("Enter choice: ");
 			action = Console.ReadLine()?.Trim().ToUpperInvariant();
@@ -117,6 +121,10 @@ class Program
 
 					case "T":
 						await ToggleSku();
+						break;
+
+					case "G":
+						await GenerateSasToken();
 						break;
 
 					case "Q":
@@ -345,4 +353,61 @@ class Program
 		Console.ResetColor();
 		Console.WriteLine($"Updated pricing tier: {_namespaceResource.Data.Sku.Name}");
 	}
+
+	private static async Task GenerateSasToken()
+	{
+		const string policyName = "ces-policy";
+
+		var authRules = _eventHubResource.GetEventHubAuthorizationRules();
+		EventHubAuthorizationRuleResource policy;
+
+		try
+		{
+			policy = await authRules.GetAsync(policyName);
+			Console.WriteLine($"Policy '{policyName}' already exists.");
+		}
+		catch (RequestFailedException ex) when (ex.Status == 404)
+		{
+			Console.ForegroundColor = ConsoleColor.Red;
+			Console.WriteLine($"ERROR: Policy '{policyName}' does not exist.");
+			return;
+		}
+
+		var keys = await policy.GetKeysAsync();
+		var primaryKey = keys.Value.PrimaryKey;
+
+		if (string.IsNullOrEmpty(primaryKey))
+		{
+			Console.ForegroundColor = ConsoleColor.Red;
+			Console.WriteLine("Primary key is empty. Cannot generate SAS token.");
+			Console.ResetColor();
+			return;
+		}
+
+		var resourceUri = $"https://{_namespaceName}.servicebus.windows.net/{_eventHubName}";
+		var sasToken = CreateSasToken(resourceUri, policyName, primaryKey);
+
+		Console.ForegroundColor = ConsoleColor.Cyan;
+		Console.WriteLine("-- Generated SAS Token --");
+		Console.ResetColor();
+		Console.WriteLine(sasToken);
+		Console.ForegroundColor = ConsoleColor.Cyan;
+		Console.WriteLine("-- End of generated SAS Token --");
+		Console.ResetColor();
+	}
+
+	private static string CreateSasToken(string resourceUri, string keyName, string key)
+	{
+		var expiry = (int)(DateTime.UtcNow.AddMonths(6) - new DateTime(1970, 1, 1)).TotalSeconds;
+
+		var encodedUri = WebUtility.UrlEncode(resourceUri);
+		var stringToSign = $"{encodedUri}\n{expiry}";
+
+		using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(key));
+		var signature = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(stringToSign)));
+		var encodedSig = WebUtility.UrlEncode(signature);
+
+		return $"SharedAccessSignature sr={encodedUri}&sig={encodedSig}&se={expiry}&skn={keyName}";
+	}
+
 }
