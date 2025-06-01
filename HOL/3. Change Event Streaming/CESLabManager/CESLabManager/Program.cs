@@ -8,19 +8,31 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Azure;
+using Microsoft.Extensions.Configuration;
+using Azure.ResourceManager.Resources;
 
 class Program
 {
-	private const string ResourceGroup = "demos-rg";
-	private const string NamespaceName = "sql2025-ces";
-	private const string EventHubName = "ces-hub";
+	private static SubscriptionData _subscriptionData;
+	private static string _resourceGroupName;
+	private static string _namespaceName;
+	private static string _eventHubName;
 
-	private static List<string> Students = new();
-	private static EventHubsNamespaceResource NamespaceResource;
-	private static EventHubResource EventHubResource;
+	private static List<string> _students;
+	private static EventHubsNamespaceResource _namespaceResource;
+	private static EventHubResource _eventHubResource;
 
 	static async Task Main()
 	{
+		var config = new ConfigurationBuilder()
+			.SetBasePath(Directory.GetCurrentDirectory())
+			.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+			.Build();
+
+		_resourceGroupName = config["EventHub:ResourceGroupName"];
+		_namespaceName = config["EventHub:NamespaceName"];
+		_eventHubName = config["EventHub:EventHubName"];
+
 		var currentDir = AppContext.BaseDirectory;
 		var studentsFilePath = Path.Combine(currentDir, "Students.txt");
 
@@ -31,7 +43,7 @@ class Program
 			return;
 		}
 
-		Students = File.ReadAllLines(studentsFilePath)
+		_students = File.ReadAllLines(studentsFilePath)
 			.Select(line => line.Trim())
 			.Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith("#"))
 			.ToList();
@@ -42,30 +54,44 @@ class Program
 		try
 		{
 			var subscription = await armClient.GetDefaultSubscriptionAsync();
-			var resourceGroup = await subscription.GetResourceGroups().GetAsync(ResourceGroup);
-			NamespaceResource = await resourceGroup.Value.GetEventHubsNamespaces().GetAsync(NamespaceName);
-			EventHubResource = await NamespaceResource.GetEventHubs().GetAsync(EventHubName);
+			_subscriptionData = subscription.Data;
+
+			var resourceGroup = await subscription.GetResourceGroups().GetAsync(_resourceGroupName);
+			_namespaceResource = await resourceGroup.Value.GetEventHubsNamespaces().GetAsync(_namespaceName);
+			_eventHubResource = await _namespaceResource.GetEventHubs().GetAsync(_eventHubName);
 		}
 		catch
 		{
 			Console.ForegroundColor = ConsoleColor.Red;
-			Console.WriteLine("ERROR: Could not retrieve Event Hub namespace. Check resource group and namespace name.");
+			Console.WriteLine("ERROR: Could not retrieve Azure resource information.");
 			return;
 		}
-
-		Console.WriteLine($"Event Hub: {EventHubName}");
-		Console.WriteLine($"Resource Group: {ResourceGroup}");
-		Console.WriteLine($"Namespace: {NamespaceName}");
 
 		var action = default(string);
 		do
 		{
 			Console.ForegroundColor = ConsoleColor.Cyan;
 			Console.WriteLine($"Change Event Stream (CES) Lab Manager");
-			Console.WriteLine($"Current Tier: {NamespaceResource.Data.Sku.Name}");
+			Console.WriteLine($"Current Tier: {_namespaceResource.Data.Sku.Name}");
 			Console.ResetColor();
 			Console.WriteLine();
-			Console.WriteLine("Choose an action:");
+			Console.ForegroundColor = ConsoleColor.White;
+			Console.WriteLine("Azure Subscription Information");
+			Console.ResetColor();
+			Console.WriteLine($"  Subscription Name    : {_subscriptionData.DisplayName}");
+			Console.WriteLine($"  Subscription ID      : {_subscriptionData.SubscriptionId}");
+			Console.WriteLine($"  Tenant ID            : {_subscriptionData.TenantId}");
+			Console.ForegroundColor = ConsoleColor.White;
+			Console.WriteLine();
+			Console.WriteLine($"Azure Event Hubs Information");
+			Console.ResetColor();
+			Console.WriteLine($"  Resource Group Name  : {_resourceGroupName}");
+			Console.WriteLine($"  Namespace Name       : {_namespaceName}");
+			Console.WriteLine($"  Event Hub Name       : {_eventHubName}");
+			Console.WriteLine();
+			Console.ForegroundColor = ConsoleColor.White;
+			Console.WriteLine("Choose an action");
+			Console.ResetColor();
 			Console.WriteLine("  S = Show student list");
 			Console.WriteLine("  L = List all consumer groups");
 			Console.WriteLine("  C = Create student consumer groups");
@@ -76,52 +102,61 @@ class Program
 			Console.Write("Enter choice (S, L, C, D, T, Q): ");
 			action = Console.ReadLine()?.Trim().ToUpperInvariant();
 
-			switch (action)
+			try
 			{
-				case "S":
-					ShowStudentList();
-					break;
+				switch (action)
+				{
+					case "S":
+						ShowStudentList();
+						break;
 
-				case "L":
-					await ListConsumerGroups();
-					break;
+					case "L":
+						await ListConsumerGroups();
+						break;
 
-				case "C":
-					await CreateConsumerGroups();
-					break;
+					case "C":
+						await CreateConsumerGroups();
+						break;
 
-				case "D":
-					await DeleteConsumerGroups();
-					break;
+					case "D":
+						await DeleteConsumerGroups();
+						break;
 
-				case "T":
-					await ToggleSku();
-					break;
+					case "T":
+						await ToggleSku();
+						break;
 
-				case "Q":
-					Console.WriteLine("Exiting...");
-					break;
+					case "Q":
+						Console.WriteLine("Exiting...");
+						break;
 
-				default:
-					Console.WriteLine("Invalid input.");
-					break;
+					default:
+						Console.WriteLine("Invalid input.");
+						break;
+				}
 			}
-
+			catch (Exception ex)
+			{
+				Console.ForegroundColor = ConsoleColor.Red;
+				Console.WriteLine($"Error: {ex.Message}");
+				Console.ResetColor();
+			}
+			Console.WriteLine();
 		} while (action != "Q");
 	}
 
 	static void ShowStudentList()
 	{
 		Console.WriteLine("\nStudent list (used to name consumer groups):\n");
-		Students.ForEach(s => { Console.ForegroundColor = ConsoleColor.Green; Console.WriteLine(s); });
+		_students.ForEach(s => { Console.ForegroundColor = ConsoleColor.Green; Console.WriteLine(s); });
 		Console.ResetColor();
-		Console.WriteLine($"\nTotal Students: {Students.Count}");
+		Console.WriteLine($"\nTotal Students: {_students.Count}");
 	}
 
 	static async Task<List<string>> GetConsumerGroupNames()
 	{
 		var list = new List<string>();
-		await foreach (var group in EventHubResource.GetEventHubsConsumerGroups().GetAllAsync())
+		await foreach (var group in _eventHubResource.GetEventHubsConsumerGroups().GetAllAsync())
 		{
 			list.Add(group.Data.Name);
 		}
@@ -130,7 +165,7 @@ class Program
 
 	static async Task ListConsumerGroups()
 	{
-		Console.WriteLine($"\nListing all consumer groups in '{EventHubName}':\n");
+		Console.WriteLine($"\nListing all consumer groups in '{_eventHubName}':\n");
 		var groups = await GetConsumerGroupNames();
 		groups.ForEach(g => { Console.ForegroundColor = ConsoleColor.Green; Console.WriteLine(g); });
 		Console.ResetColor();
@@ -145,7 +180,7 @@ class Program
 		var existing = await GetConsumerGroupNames();
 		int count = 0;
 
-		foreach (var student in Students)
+		foreach (var student in _students)
 		{
 			var name = $"cg-{student}";
 			if (existing.Contains(name))
@@ -157,7 +192,16 @@ class Program
 			{
 				Console.ForegroundColor = ConsoleColor.Green;
 				Console.WriteLine($"Creating Consumer Group: {name}");
-				await EventHubResource.GetEventHubsConsumerGroups().CreateOrUpdateAsync(WaitUntil.Completed, name, new EventHubsConsumerGroupData());
+				try
+				{
+					await _eventHubResource.GetEventHubsConsumerGroups().CreateOrUpdateAsync(WaitUntil.Completed, name, new EventHubsConsumerGroupData());
+				}
+				catch (Exception ex)
+				{
+					Console.ForegroundColor = ConsoleColor.Red;
+					Console.WriteLine($"Error creating consumer group '{name}': {ex.Message}");
+					continue;
+				}
 				count++;
 			}
 		}
@@ -174,14 +218,14 @@ class Program
 		var existing = await GetConsumerGroupNames();
 		int count = 0;
 
-		foreach (var student in Students)
+		foreach (var student in _students)
 		{
 			var name = $"cg-{student}";
 			if (existing.Contains(name))
 			{
 				Console.ForegroundColor = ConsoleColor.Green;
 				Console.WriteLine($"Deleting Consumer Group: {name}");
-				await EventHubResource.GetEventHubsConsumerGroups().Get(name).Value.DeleteAsync(WaitUntil.Completed);
+				await _eventHubResource.GetEventHubsConsumerGroups().Get(name).Value.DeleteAsync(WaitUntil.Completed);
 				count++;
 			}
 			else
@@ -197,15 +241,15 @@ class Program
 
 	static async Task ToggleSku()
 	{
-		var currentSku = NamespaceResource.Data.Sku.Name;
-		Console.WriteLine($"\nToggling pricing tier for Event Hub Namespace '{NamespaceName}' (Current Tier: {currentSku})");
+		var currentSku = _namespaceResource.Data.Sku.Name;
+		Console.WriteLine($"\nToggling pricing tier for Event Hub Namespace '{_namespaceName}' (Current Tier: {currentSku})");
 
 		if (currentSku == "Standard")
 		{
 			Console.ForegroundColor = ConsoleColor.Yellow;
 			Console.WriteLine("Current tier is Standard. Preparing to downgrade to Basic...");
 
-			await foreach (var group in EventHubResource.GetEventHubsConsumerGroups().GetAllAsync())
+			await foreach (var group in _eventHubResource.GetEventHubsConsumerGroups().GetAllAsync())
 			{
 				if (group.Data.Name != "$Default")
 				{
@@ -217,19 +261,19 @@ class Program
 
 			Console.WriteLine("Updating tier to Basic...");
 
-			var data = NamespaceResource.Data;
+			var data = _namespaceResource.Data;
 			data.Sku = new EventHubsSku("Basic");
-			NamespaceResource = await NamespaceResource.UpdateAsync(data);
+			_namespaceResource = await _namespaceResource.UpdateAsync(data);
 		}
 		else if (currentSku == "Basic")
 		{
 			Console.ForegroundColor = ConsoleColor.Green;
 			Console.WriteLine("Current tier is Basic. Upgrading to Standard...");
 
-			var data = NamespaceResource.Data;
+			var data = _namespaceResource.Data;
 			data.Sku = new EventHubsSku("Standard");
 
-			NamespaceResource = await NamespaceResource.UpdateAsync(data);
+			_namespaceResource = await _namespaceResource.UpdateAsync(data);
 		}
 		else
 		{
@@ -237,8 +281,8 @@ class Program
 			Console.WriteLine($"Unsupported SKU type: {currentSku}");
 		}
 
-		NamespaceResource = await NamespaceResource.GetAsync(); // refresh
+		_namespaceResource = await _namespaceResource.GetAsync(); // refresh
 		Console.ResetColor();
-		Console.WriteLine($"Updated pricing tier: {NamespaceResource.Data.Sku.Name}");
+		Console.WriteLine($"Updated pricing tier: {_namespaceResource.Data.Sku.Name}");
 	}
 }
