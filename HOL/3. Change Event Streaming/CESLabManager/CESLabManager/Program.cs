@@ -1,15 +1,15 @@
-﻿using Azure.Identity;
+﻿using Azure;
+using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.EventHubs;
 using Azure.ResourceManager.EventHubs.Models;
+using Azure.ResourceManager.Resources;
+using Microsoft.Extensions.Configuration;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Collections.Generic;
-using Azure;
-using Microsoft.Extensions.Configuration;
-using Azure.ResourceManager.Resources;
 
 class Program
 {
@@ -67,6 +67,8 @@ class Program
 			return;
 		}
 
+		ViewConfiguration();
+
 		var action = default(string);
 		do
 		{
@@ -76,36 +78,27 @@ class Program
 			Console.ResetColor();
 			Console.WriteLine();
 			Console.ForegroundColor = ConsoleColor.White;
-			Console.WriteLine("Azure Subscription Information");
-			Console.ResetColor();
-			Console.WriteLine($"  Subscription Name    : {_subscriptionData.DisplayName}");
-			Console.WriteLine($"  Subscription ID      : {_subscriptionData.SubscriptionId}");
-			Console.WriteLine($"  Tenant ID            : {_subscriptionData.TenantId}");
-			Console.ForegroundColor = ConsoleColor.White;
-			Console.WriteLine();
-			Console.WriteLine($"Azure Event Hubs Information");
-			Console.ResetColor();
-			Console.WriteLine($"  Resource Group Name  : {_resourceGroupName}");
-			Console.WriteLine($"  Namespace Name       : {_namespaceName}");
-			Console.WriteLine($"  Event Hub Name       : {_eventHubName}");
-			Console.WriteLine();
-			Console.ForegroundColor = ConsoleColor.White;
 			Console.WriteLine("Choose an action");
 			Console.ResetColor();
+			Console.WriteLine("  V = View configuration");
 			Console.WriteLine("  S = Show student list");
 			Console.WriteLine("  L = List all consumer groups");
 			Console.WriteLine("  C = Create student consumer groups");
 			Console.WriteLine("  D = Delete student consumer groups");
-			Console.WriteLine("  T = Toggle Event Hub pricing tier (Standard <-> Basic)");
+			Console.WriteLine($"  T = Toggle pricing tier ({(_namespaceResource.Data.Sku.Name == "Standard" ? "Standard -> Basic" : "Basic -> Standard")})");
 			Console.WriteLine("  Q = Quit");
 			Console.WriteLine();
-			Console.Write("Enter choice (S, L, C, D, T, Q): ");
+			Console.Write("Enter choice: ");
 			action = Console.ReadLine()?.Trim().ToUpperInvariant();
 
 			try
 			{
 				switch (action)
 				{
+					case "V":
+						ViewConfiguration();
+						break;
+
 					case "S":
 						ShowStudentList();
 						break;
@@ -142,18 +135,49 @@ class Program
 				Console.ResetColor();
 			}
 			Console.WriteLine();
+			Console.Write("Press any key to continue... ");
+			Console.ReadKey(intercept: true);
+			Console.Clear();
+
 		} while (action != "Q");
 	}
 
-	static void ShowStudentList()
+	private static void ViewConfiguration()
 	{
-		Console.WriteLine("\nStudent list (used to name consumer groups):\n");
-		_students.ForEach(s => { Console.ForegroundColor = ConsoleColor.Green; Console.WriteLine(s); });
+		Console.ForegroundColor = ConsoleColor.White;
+		Console.WriteLine("Azure Subscription Information");
 		Console.ResetColor();
-		Console.WriteLine($"\nTotal Students: {_students.Count}");
+		Console.WriteLine($"  Subscription Name    : {_subscriptionData.DisplayName}");
+		Console.WriteLine($"  Subscription ID      : {_subscriptionData.SubscriptionId}");
+		Console.WriteLine($"  Tenant ID            : {_subscriptionData.TenantId}");
+		Console.ForegroundColor = ConsoleColor.White;
+		Console.WriteLine();
+		Console.WriteLine($"Azure Event Hubs Information");
+		Console.ResetColor();
+		Console.WriteLine($"  Resource Group Name  : {_resourceGroupName}");
+		Console.WriteLine($"  Namespace Name       : {_namespaceName}");
+		Console.WriteLine($"  Event Hub Name       : {_eventHubName}");
+		Console.WriteLine();
 	}
 
-	static async Task<List<string>> GetConsumerGroupNames()
+	private static void ShowStudentList()
+	{
+		Console.WriteLine();
+		Console.WriteLine("Student list (used to name consumer groups):");
+		Console.WriteLine();
+
+		Console.ForegroundColor = ConsoleColor.Green;
+		foreach (var student in _students)
+		{
+			Console.WriteLine(student);
+		}
+
+		Console.ResetColor();
+		Console.WriteLine();
+		Console.WriteLine($"Total Students: {_students.Count}");
+	}
+
+	private static async Task<List<string>> GetConsumerGroupNames()
 	{
 		var list = new List<string>();
 		await foreach (var group in _eventHubResource.GetEventHubsConsumerGroups().GetAllAsync())
@@ -163,22 +187,43 @@ class Program
 		return list;
 	}
 
-	static async Task ListConsumerGroups()
+	private static async Task ListConsumerGroups()
 	{
-		Console.WriteLine($"\nListing all consumer groups in '{_eventHubName}':\n");
+		Console.WriteLine();
+		Console.WriteLine($"Listing all consumer groups in '{_eventHubName}':");
+
 		var groups = await GetConsumerGroupNames();
-		groups.ForEach(g => { Console.ForegroundColor = ConsoleColor.Green; Console.WriteLine(g); });
+
+		Console.ForegroundColor = ConsoleColor.Green;
+		foreach (var group in groups)
+		{
+			Console.WriteLine(group);
+		}
 		Console.ResetColor();
-		Console.WriteLine($"\nTotal Consumer Groups: {groups.Count}");
+
+		Console.WriteLine();
+		Console.WriteLine($"Total Consumer Groups: {groups.Count}");
 	}
 
-	static async Task CreateConsumerGroups()
+	private static async Task CreateConsumerGroups()
 	{
-		Console.Write("\nAre you sure you want to create all student consumer groups? (Y/N): ");
-		if (!Console.ReadLine().Trim().Equals("Y", StringComparison.OrdinalIgnoreCase)) return;
+		if (_namespaceResource.Data.Sku.Name == "Basic")
+		{
+			Console.ForegroundColor = ConsoleColor.Red;
+			Console.WriteLine("Cannot create consumer groups for Basic SKU; first toggle the SKU to Standard");
+			Console.ResetColor();
+			return;
+		}
+
+		Console.WriteLine();
+		Console.Write("Are you sure you want to create all student consumer groups? (Y/N): ");
+		if (!Console.ReadLine().Trim().Equals("Y", StringComparison.OrdinalIgnoreCase))
+		{
+			return;
+		}
 
 		var existing = await GetConsumerGroupNames();
-		int count = 0;
+		var count = 0;
 
 		foreach (var student in _students)
 		{
@@ -207,16 +252,20 @@ class Program
 		}
 
 		Console.ResetColor();
-		Console.WriteLine($"\nTotal Consumer Groups Created: {count}");
+		Console.WriteLine();
+		Console.WriteLine($"Total Consumer Groups Created: {count}");
 	}
 
-	static async Task DeleteConsumerGroups()
+	private static async Task DeleteConsumerGroups()
 	{
-		Console.Write("\nAre you sure you want to delete all student consumer groups? (Y/N): ");
-		if (!Console.ReadLine().Trim().Equals("Y", StringComparison.OrdinalIgnoreCase)) return;
+		Console.Write("Are you sure you want to delete all student consumer groups? (Y/N): ");
+		if (!Console.ReadLine().Trim().Equals("Y", StringComparison.OrdinalIgnoreCase))
+		{
+			return;
+		}
 
 		var existing = await GetConsumerGroupNames();
-		int count = 0;
+		var count = 0;
 
 		foreach (var student in _students)
 		{
@@ -236,13 +285,24 @@ class Program
 		}
 
 		Console.ResetColor();
-		Console.WriteLine($"\nTotal Consumer Groups Deleted: {count}");
+		
+		Console.WriteLine();
+		Console.WriteLine($"Total Consumer Groups Deleted: {count}");
 	}
 
-	static async Task ToggleSku()
+	private static async Task ToggleSku()
 	{
 		var currentSku = _namespaceResource.Data.Sku.Name;
-		Console.WriteLine($"\nToggling pricing tier for Event Hub Namespace '{_namespaceName}' (Current Tier: {currentSku})");
+
+		Console.WriteLine();
+		Console.Write($"Are you sure you want to toggle the SKU from {currentSku}? (Y/N): ");
+		if (!Console.ReadLine().Trim().Equals("Y", StringComparison.OrdinalIgnoreCase))
+		{
+			return;
+		}
+
+		Console.WriteLine();
+		Console.WriteLine($"Toggling pricing tier for Event Hub Namespace '{_namespaceName}' (Current Tier: {currentSku})");
 
 		if (currentSku == "Standard")
 		{
