@@ -14,6 +14,7 @@ class Program
 	private const string ResourceGroup = "demos-rg";
 	private const string NamespaceName = "sql2025-ces";
 	private const string EventHubName = "ces-hub";
+
 	private static List<string> Students = new();
 	private static EventHubsNamespaceResource NamespaceResource;
 	private static EventHubResource EventHubResource;
@@ -35,9 +36,8 @@ class Program
 			.Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith("#"))
 			.ToList();
 
-		var credential = new AzureCliCredential(); // or new VisualStudioCredential()
+		var credential = new AzureCliCredential();      // requires that you first run `az login` in a terminal
 		var armClient = new ArmClient(credential);
-		//var armClient = new ArmClient(new DefaultAzureCredential());
 
 		try
 		{
@@ -53,36 +53,61 @@ class Program
 			return;
 		}
 
-		Console.ForegroundColor = ConsoleColor.Cyan;
-		Console.WriteLine($"Manage Event Hub Consumer Groups for HOL Students (Current Tier: {NamespaceResource.Data.Sku.Name})");
+		Console.WriteLine($"Event Hub: {EventHubName}");
+		Console.WriteLine($"Resource Group: {ResourceGroup}");
+		Console.WriteLine($"Namespace: {NamespaceName}");
 
-		string mode;
+		var action = default(string);
 		do
 		{
+			Console.ForegroundColor = ConsoleColor.Cyan;
+			Console.WriteLine($"Change Event Stream (CES) Lab Manager");
+			Console.WriteLine($"Current Tier: {NamespaceResource.Data.Sku.Name}");
 			Console.ResetColor();
-			Console.WriteLine("\nChoose an action:");
+			Console.WriteLine();
+			Console.WriteLine("Choose an action:");
 			Console.WriteLine("  S = Show student list");
 			Console.WriteLine("  L = List all consumer groups");
 			Console.WriteLine("  C = Create student consumer groups");
 			Console.WriteLine("  D = Delete student consumer groups");
 			Console.WriteLine("  T = Toggle Event Hub pricing tier (Standard <-> Basic)");
-			Console.WriteLine("  Q = Quit\n");
-
+			Console.WriteLine("  Q = Quit");
+			Console.WriteLine();
 			Console.Write("Enter choice (S, L, C, D, T, Q): ");
-			mode = Console.ReadLine()?.Trim().ToUpperInvariant();
+			action = Console.ReadLine()?.Trim().ToUpperInvariant();
 
-			switch (mode)
+			switch (action)
 			{
-				case "S": ShowStudentList(); break;
-				case "L": await ListConsumerGroups(); break;
-				case "C": await CreateConsumerGroups(); break;
-				case "D": await DeleteConsumerGroups(); break;
-				case "T": await ToggleSku(); break;
-				case "Q": Console.WriteLine("Exiting..."); break;
-				default: Console.WriteLine("Invalid input."); break;
+				case "S":
+					ShowStudentList();
+					break;
+
+				case "L":
+					await ListConsumerGroups();
+					break;
+
+				case "C":
+					await CreateConsumerGroups();
+					break;
+
+				case "D":
+					await DeleteConsumerGroups();
+					break;
+
+				case "T":
+					await ToggleSku();
+					break;
+
+				case "Q":
+					Console.WriteLine("Exiting...");
+					break;
+
+				default:
+					Console.WriteLine("Invalid input.");
+					break;
 			}
 
-		} while (mode != "Q");
+		} while (action != "Q");
 	}
 
 	static void ShowStudentList()
