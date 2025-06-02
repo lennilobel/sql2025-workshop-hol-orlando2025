@@ -1,4 +1,4 @@
-﻿# RAG Solution  
+﻿# Recipes RAG Solution  
 
 This lab implements a primitive **Retrieval-Augmented Generation (RAG)** pattern. RAG is a technique that enhances AI-generated responses by retrieving relevant documents from a knowledge base before passing them into a language model. Instead of relying solely on the model’s pre-trained knowledge, RAG dynamically incorporates external data, allowing it to provide more contextually relevant and accurate responses. A full RAG solution doesn't just perform vector search—it takes the raw vector search results and transforms them into a natural language response using a pre-trained **chat completions model**. This means we are moving beyond merely retrieving semantically similar records, and into generating human-friendly answers based on the retrieved data.
 
