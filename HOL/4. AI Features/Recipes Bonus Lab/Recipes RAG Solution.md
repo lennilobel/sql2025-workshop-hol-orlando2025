@@ -544,8 +544,8 @@ BEGIN
   -- Azure OpenAI endpoint
   DECLARE @OpenAIEndpoint varchar(max) = 'https://lenni-m6wi7gcd-eastus2.cognitiveservices.azure.com/'
   DECLARE @OpenAIDeploymentName varchar(max) = 'gpt-4o' -- Use the appropriate GPT model deployment name
-  DECLARE @OpenAIVersion varchar(max) = '2023-05-15'
-  DECLARE @Url varchar(max) = CONCAT(@OpenAIEndpoint, 'openai/deployments/', @OpenAIDeploymentName, '/chat/completions?api-version=', @OpenAIVersion)
+  DECLARE @OpenAIApiVersionVersion varchar(max) = '2023-05-15'
+  DECLARE @Url varchar(max) = CONCAT(@OpenAIEndpoint, 'openai/deployments/', @OpenAIDeploymentName, '/chat/completions?api-version=', @OpenAIApiVersionVersion)
 
   -- Azure OpenAI API key
   DECLARE @OpenAIApiKey varchar(max) = '<provided by the instructor>'
