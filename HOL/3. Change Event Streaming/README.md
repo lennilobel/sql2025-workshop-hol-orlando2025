@@ -43,3 +43,7 @@ To ensure that each attendee sees only their own events and progress, we impleme
 
    > All checkpoint data is stored in the same Azure Blob Storage container, but because each consumer group is unique, each attendee has their own isolated set of checkpoint blobs, ensuring you receive your own event stream without interference from other attendees.
 
+___
+
+▶ [Lab: T-SQL Enhancements - UNISTR](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/blob/main/HOL/1.%20T-SQL%20Enhancements/1.%20UNISTR.md)
+
