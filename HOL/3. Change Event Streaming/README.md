@@ -45,5 +45,5 @@ To ensure that each attendee sees only their own events and progress, we impleme
 
 ___
 
-▶ [Lab: T-SQL Enhancements - UNISTR](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/blob/main/HOL/1.%20T-SQL%20Enhancements/1.%20UNISTR.md)
+▶ [Lab: Create the Sample CES Database](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/blob/main/HOL/3.%20Change%20Event%20Streaming/1.%20Create%20the%20Sample%20CES%20Database.md)
 
