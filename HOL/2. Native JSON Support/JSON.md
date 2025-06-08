@@ -1,4 +1,4 @@
-# Exploring New JSON Capabilities in SQL Server 2025
+﻿# Exploring New JSON Capabilities in SQL Server 2025
 
 SQL Server 2025 introduces several powerful enhancements to its native JSON support, addressing long-standing gaps in performance, usability, and standards compliance. These features make JSON a first-class citizen alongside traditional relational data types.
 
@@ -73,21 +73,77 @@ Previously, JSON was stored as `nvarchar`, which treated the JSON payload as an 
 
 Another major advantage of the `json` data type is its **internal compact binary format**, which is more space-efficient than storing JSON text in `nvarchar(max)`. SQL Server parses and stores the document in a binary representation optimized for traversal and indexing, reducing memory usage and I/O.
 
-You can observe this difference with `DATALENGTH`, which returns the number of bytes used to store a value:
+You can observe this difference with `DATALENGTH`, which returns the number of bytes used to store a value. The following example compares storage sizes for the same JSON content stored as `varchar(max)`, `nvarchar(max)`, and native `json`:
 
 ```sql
--- Compare storage size between json and nvarchar
-DECLARE @jsonText nvarchar(max) = N'{ "x": 123, "y": 456, "z": [1, 2, 3] }'
-DECLARE @jsonBinary json = N'{ "x": 123, "y": 456, "z": [1, 2, 3] }'
+DECLARE @JsonData_nvarchar nvarchar(max) = N'
+[
+	{
+		"OrderId": 5,
+		"CustomerId": 6,
+		"OrderDate": "2024-10-10T14:22:27.25-05:00",
+		"OrderAmount": 25.9
+	},
+	{
+		"OrderId": 6,
+		"CustomerId": 76,
+		"OrderDate": "2024-12-10T11:02:36.12-08:00",
+		"OrderAmount": 350.25
+	},
+	{
+		"OrderId": 7,
+		"CustomerId": 9,
+		"OrderDate": "2024-10-10T14:22:27.25-05:00",
+		"OrderAmount": 862.75
+	},
+	{
+		"OrderId": 8,
+		"CustomerId": 7,
+		"OrderDate": "2024-12-10T11:02:36.12-08:00",
+		"OrderAmount": 591.95
+	},
+	{
+		"OrderId": 9,
+		"CustomerId": 15,
+		"OrderDate": "2024-10-10T14:22:27.25-05:00",
+		"OrderAmount": 8510.00
+	},
+	{
+		"OrderId": 10,
+		"CustomerId": 2,
+		"OrderDate": "2024-12-10T11:02:36.12-08:00",
+		"OrderAmount": 871.10
+	}
+]'
+
+DECLARE @JsonData_varchar  varchar(max)   = CAST(@JsonData_nvarchar AS varchar(max))
+DECLARE @JsonData_json     json           = CAST(@JsonData_nvarchar AS json)
 
 SELECT
-    DATALENGTH(@jsonText) AS NVarCharSize,
-    DATALENGTH(@jsonBinary) AS JsonSize
+  Length_varchar  = DATALENGTH(@JsonData_varchar),
+  Length_nvarchar = DATALENGTH(@JsonData_nvarchar),
+  Length_json     = DATALENGTH(@JsonData_json)
 ```
+
+The results typically show:
+
+* `varchar(max)` size: 721 bytes
+* `nvarchar(max)` size: 1442 bytes (due to 2 bytes per Unicode character)
+* `json` size: 529 bytes (thanks to its compact binary storage format)
+
+> This highlights a dramatic advantage of the `json` type: **even while preserving full Unicode fidelity like `nvarchar(max)`, it consumes significantly less space**—in this example, a reduction from 1442 bytes to just 529 bytes. This efficiency translates to reduced I/O, lower memory pressure, and better performance overall when working with large-scale JSON datasets.
+
+> The `json` data type in SQL Server inherently supports Unicode, similar to `nvarchar`. This makes it safer than `varchar` for multilingual data and avoids the risk of character loss or corruption.
+
+> ⚠️ Storing JSON in `varchar(max)` can result in **data loss** if the JSON contains non-ASCII or multilingual Unicode characters. Always use `nvarchar` or `json` to preserve text integrity.
+
+GO
+
+````
 
 Depending on the structure and length of the JSON, the difference may range from modest to substantial.
 
-Let�s update an order to mark it as shipped:
+Let’s update an order to mark it as shipped:
 
 ```sql
 UPDATE Sales.JsonDemo
@@ -119,7 +175,7 @@ This makes JSON updates as natural as relational updates, with less overhead and
 
 To enable fast filtering, SQL Server 2025 introduces native JSON indexing. Instead of writing computed columns or `OPENJSON` wrappers, you can declare a JSON index directly on paths.
 
-This provides an alternative to the legacy approach used in earlier versions of SQL Server. Previously, developers would create **computed columns** based on `JSON_VALUE()` expressions and then index those columns. While effective, this method required more schema scaffolding and introduced some maintenance overhead. It also persisted the computed values, which could consume additional storage depending on the use case. However, this approach remains viable�especially when dealing with fixed, flat JSON paths and when targeting compatibility with SQL Server versions prior to 2025.
+This provides an alternative to the legacy approach used in earlier versions of SQL Server. Previously, developers would create **computed columns** based on `JSON_VALUE()` expressions and then index those columns. While effective, this method required more schema scaffolding and introduced some maintenance overhead. It also persisted the computed values, which could consume additional storage depending on the use case. However, this approach remains viable—especially when dealing with fixed, flat JSON paths and when targeting compatibility with SQL Server versions prior to 2025.
 
 In contrast, `CREATE JSON INDEX` in SQL Server 2025 allows you to define **JSON path indexes directly** against native `json` columns. SQL Server transparently builds and maintains a specialized index structure behind the scenes, with full awareness of the JSON document structure. These indexes are more efficient, easier to maintain, and allow more expressive querying without schema bloat.
 
@@ -135,7 +191,7 @@ WHERE JSON_VALUE(OrderDetails, '$.lines[*].productId') = '712'
 
 The optimizer can now leverage the JSON index, improving performance without complex schema refactoring.
 
-Let�s walk through how to confirm this using an execution plan:
+Let’s walk through how to confirm this using an execution plan:
 
 1. In SQL Server Management Studio (SSMS), click on the **Include Actual Execution Plan** button in the toolbar, or press **Ctrl+M**.
 2. **Do not create the index yet.** First, run the query below to capture a baseline execution plan:
@@ -172,7 +228,7 @@ To confirm that the index is being used, you can examine the execution plan for 
 
 ## Inspecting Index Paths with `sys.json_index_paths`
 
-To understand what paths are indexed and how they�re interpreted, use the new system view `sys.json_index_paths`:
+To understand what paths are indexed and how they’re interpreted, use the new system view `sys.json_index_paths`:
 
 ```sql
 SELECT *
