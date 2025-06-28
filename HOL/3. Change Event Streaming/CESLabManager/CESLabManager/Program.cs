@@ -154,10 +154,12 @@ namespace CESLabManager
 				_namespaceResource = await resourceGroup.Value.GetEventHubsNamespaces().GetAsync(_namespaceName);
 				_eventHubResource = await _namespaceResource.GetEventHubs().GetAsync(_eventHubName);
 			}
-			catch
+			catch (Exception ex)
 			{
 				Console.ForegroundColor = ConsoleColor.Red;
 				Console.WriteLine("ERROR: Could not retrieve Azure resource information.");
+				Console.WriteLine(ex.Message);
+				Console.ResetColor();
 				return false;
 			}
 
