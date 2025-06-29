@@ -1,1 +1,2 @@
 Attendee,NamespaceName,SasToken
+john-doe,ces-namespace-john-doe,SharedAccessSignature sr=https%3A%2F%2Fces-namespace-john-doe.servicebus.windows.net%2Fces-hub&sig=m6JAx5MG9VDuAPrqTDwUa2Yj11T41by1pVfvFXvoPSw%3D&se=1751479600&skn=ces-policy

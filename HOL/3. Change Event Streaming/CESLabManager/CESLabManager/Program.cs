@@ -25,7 +25,7 @@ namespace CESLabManager
 		private static string _policyName;
 		private static int _sasTokenExpirationDays;
 
-		private static List<string> _attendees;
+		private static string[] _attendees;
 		private static SubscriptionData _subscriptionData;
 		private static ResourceGroupResource _resourceGroup;
 
@@ -56,46 +56,41 @@ namespace CESLabManager
 				Console.WriteLine($"  Q = Quit");
 				Console.WriteLine();
 				Console.Write("Enter choice: ");
-				action = Console.ReadLine()?.Trim().ToUpperInvariant();
 
-				try
+				var input = Console.ReadLine()?.Trim();
+				var tokens = input?.Split([' '], 2, StringSplitOptions.RemoveEmptyEntries) ?? [];
+				action = tokens.ElementAtOrDefault(0)?.ToUpperInvariant();
+				var attendee = tokens.ElementAtOrDefault(1); // attendee name if provided
+
+				switch (action)
 				{
-					switch (action)
-					{
-						case "V":
-							ViewConfiguration();
-							break;
+					case "V":
+						ViewConfiguration();
+						break;
 
-						case "A":
-							ShowAttendeeList();
-							break;
+					case "A":
+						ShowAttendeeList();
+						break;
 
-						case "L":
-							await ListNamespaces();
-							break;
+					case "L":
+						await ListNamespaces();
+						break;
 
-						case "C":
-							await CreateNamespaces();
-							break;
+					case "C":
+						await CreateNamespaces(string.IsNullOrWhiteSpace(attendee) ? null : attendee);
+						break;
 
-						case "D":
-							await DeleteNamespaces();
-							break;
+					case "D":
+						await DeleteNamespaces(string.IsNullOrWhiteSpace(attendee) ? null : attendee);
+						break;
 
-						case "Q":
-							Console.WriteLine("Exiting...");
-							break;
+					case "Q":
+						Console.WriteLine("Exiting...");
+						break;
 
-						default:
-							Console.WriteLine("Invalid input.");
-							break;
-					}
-				}
-				catch (Exception ex)
-				{
-					Console.ForegroundColor = ConsoleColor.Red;
-					Console.WriteLine($"Error: {ex.Message}");
-					Console.ResetColor();
+					default:
+						Console.WriteLine("Invalid input.");
+						break;
 				}
 				Console.WriteLine();
 				Console.Write("Press any key to continue... ");
@@ -139,7 +134,7 @@ namespace CESLabManager
 			_attendees = File.ReadAllLines(attendeesFilePath) 
 				.Select(line => line.Trim())
 				.Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith("#"))
-				.ToList();
+				.ToArray();
 
 			var credential = new AzureCliCredential();      // requires that you first run `az login` in a terminal
 			var armClient = new ArmClient(credential);
@@ -199,7 +194,7 @@ namespace CESLabManager
 			Console.ResetColor();
 
 			Console.WriteLine();
-			Console.WriteLine($"Total Attendees: {_attendees.Count}");
+			Console.WriteLine($"Total Attendees: {_attendees.Length}");
 		}
 
 		private static async Task ListNamespaces()
@@ -219,9 +214,11 @@ namespace CESLabManager
 			Console.WriteLine($"\nTotal namespaces: {counter}");
 		}
 
-		private static async Task CreateNamespaces()
+		private static async Task CreateNamespaces(string attendee = null)
 		{
-			if (!ConfirmYesNo("Are you sure you want to create namespaces for all attendees?"))
+			var attendees = attendee == null ? _attendees : [attendee];
+
+			if (!ConfirmYesNo($"Are you sure you want to create namespaces for {attendees.Length} attendee(s)?"))
 			{
 				return;
 			}
@@ -237,8 +234,9 @@ namespace CESLabManager
 				MaxDegreeOfParallelism = 5 // Too large a number can overwhelm Azure
 			};
 
+			var started = DateTime.Now;
 			Console.ForegroundColor = ConsoleColor.Green;
-			await Parallel.ForEachAsync(_attendees, options, async (attendee, cancellationToken) =>
+			await Parallel.ForEachAsync(attendees, options, async (attendee, cancellationToken) =>
 			{
 				var currentCounter = Interlocked.Increment(ref counter);
 
@@ -308,6 +306,7 @@ namespace CESLabManager
 				Interlocked.Increment(ref created);
 			});
 			Console.ResetColor();
+			var elapsed = DateTime.Now.Subtract(started);
 
 			var currentDir = AppContext.BaseDirectory + "\\..\\..\\..";
 			var outputPath = Path.Combine(currentDir, "AttendeeNamespaces.csv");
@@ -318,14 +317,34 @@ namespace CESLabManager
 				.Prepend(outputLines[0]) // Re-add header
 				.ToList();
 
+			Console.WriteLine();
+			Console.ForegroundColor = ConsoleColor.White;
+			counter = 0;
+			foreach (var line in sortedLines)
+			{
+				Console.WriteLine($"{++counter,3}. {line}");
+			}
+			Console.ResetColor();
+			Console.WriteLine();
+
 			File.WriteAllLines(outputPath, sortedLines);
-			Console.WriteLine($"\nTotal namespaces created: {created}, skipped: {skipped}");
+			Console.WriteLine($"\nTotal namespaces created: {created}, skipped: {skipped} (elapsed: {elapsed})"); 
 			Console.WriteLine($"Generated {outputPath}");
 		}
 
-		private static async Task DeleteNamespaces()
+		private static async Task DeleteNamespaces(string attendee = null)
 		{
-			if (!ConfirmYesNo("Are you sure you want to delete all attendee namespaces?"))
+			var namespaceResources = new List<EventHubsNamespaceResource>();
+			await foreach (var namespaceResource in _resourceGroup.GetEventHubsNamespaces().GetAllAsync())
+			{
+				var attendeeSuffix = namespaceResource.Data.Name.Replace(_namespaceName + "-", string.Empty);
+				if (attendee == null || namespaceResource.Data.Name == $"{_namespaceName}-{attendee}")
+				{
+					namespaceResources.Add(namespaceResource);
+				}
+			}
+
+			if (!ConfirmYesNo($"Are you sure you want to delete {namespaceResources.Count} attendee namespace(s)?"))
 			{
 				return;
 			}
@@ -336,25 +355,21 @@ namespace CESLabManager
 				MaxDegreeOfParallelism = 5
 			};
 
-			var namespaceResources = new List<EventHubsNamespaceResource>();
-			await foreach (var namespaceResource in _resourceGroup.GetEventHubsNamespaces().GetAllAsync())
-			{
-				namespaceResources.Add(namespaceResource);
-			}
-
+			var started = DateTime.Now;
 			Console.ForegroundColor = ConsoleColor.Red;
 			await Parallel.ForEachAsync(namespaceResources, options, async (eventHubsNamespace, cancellationToken) =>
 			{
-				var currentCounter = Interlocked.Increment(ref counter);
 				var namespaceName = eventHubsNamespace.Data.Name;
+				var currentCounter = Interlocked.Increment(ref counter);
 
 				Console.WriteLine($"{currentCounter,3}. Deleting: {namespaceName}");
 
 				await eventHubsNamespace.DeleteAsync(WaitUntil.Completed, cancellationToken);
 			});
 			Console.ResetColor();
+			var elapsed = DateTime.Now.Subtract(started);
 
-			Console.WriteLine($"\nTotal namespaces deleted: {counter}");
+			Console.WriteLine($"\nTotal namespaces deleted: {counter} (elapsed: {elapsed})");
 		}
 
 		private static async Task<string> GenerateSasTokenAsync(string namespaceName)
