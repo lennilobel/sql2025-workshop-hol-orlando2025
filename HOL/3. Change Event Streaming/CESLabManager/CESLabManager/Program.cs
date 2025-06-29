@@ -234,8 +234,12 @@ namespace CESLabManager
 			var created = 0;
 			var outputLines = new List<string> { "Student,NamespaceName,SasToken" };
 
+			Console.ForegroundColor = ConsoleColor.Green;
 			foreach (var student in _students)
 			{
+				Console.WriteLine();
+				Console.WriteLine($"Student: {student}");
+
 				var namespaceName = $"{_namespaceName}-{student}";
 				var namespaceCollection = _resourceGroup.GetEventHubsNamespaces();
 
@@ -247,14 +251,15 @@ namespace CESLabManager
 					continue;
 				}
 
-				Console.ForegroundColor = ConsoleColor.Green;
-				Console.WriteLine($"Creating namespace: {namespaceName}");
+				Console.WriteLine($"  Creating event hub namespace: {namespaceName}");
 
 				var namespaceData = new EventHubsNamespaceData("Central US");
 				//{
 				//	Sku = new EventHubsSku(EventHubsSkuName.Basic)
 				//};
 				var namespaceResource = await namespaceCollection.CreateOrUpdateAsync(WaitUntil.Completed, namespaceName, namespaceData);
+
+				Console.WriteLine($"  Creating event hub: {_eventHubName}");
 
 				var eventHubCollection = namespaceResource.Value.GetEventHubs();
 				await eventHubCollection.CreateOrUpdateAsync(
@@ -268,8 +273,11 @@ namespace CESLabManager
 							RetentionTimeInHours = 1
 						},
 					});
-
+				 
 				var eventHub = await namespaceResource.Value.GetEventHubs().GetAsync(_eventHubName);
+
+				Console.WriteLine($"  Creating event policy: {_policyName}");
+
 				var authRules = eventHub.Value.GetEventHubAuthorizationRules();
 				await authRules.CreateOrUpdateAsync(
 					WaitUntil.Completed,
@@ -278,8 +286,8 @@ namespace CESLabManager
 					{
 						Rights =
 						{
-							EventHubsAccessRight.Listen,
-							EventHubsAccessRight.Send,
+							//EventHubsAccessRight.Listen,
+							//EventHubsAccessRight.Send,
 							EventHubsAccessRight.Manage,
 						}
 					});
@@ -288,14 +296,14 @@ namespace CESLabManager
 				outputLines.Add($"{student},{namespaceName},{token}");
 				created++;
 			}
+			Console.ResetColor();
 
 			var currentDir = AppContext.BaseDirectory + "\\..\\..\\..";
 			var outputPath = Path.Combine(currentDir, "StudentNamespaces.csv");
 
 			File.WriteAllLines(outputPath, outputLines);
-			Console.ResetColor();
 			Console.WriteLine($"\nTotal Namespaces Created: {created}, Skipped: {skipped}");
-			Console.WriteLine("Token output written to NamespaceTokens.csv");
+			Console.WriteLine($"Generated {outputPath}");
 		}
 
 		private static async Task DeleteNamespaces()
@@ -308,7 +316,7 @@ namespace CESLabManager
 				return;
 			}
 
-			int count = 0;
+			var count = 0;
 			foreach (var student in _students)
 			{
 				var nsName = $"{_namespaceName}-{student}";
