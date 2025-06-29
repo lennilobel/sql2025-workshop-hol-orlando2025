@@ -18,7 +18,6 @@ namespace CESLabManager
 {
 	public class Program
 	{
-		private static SubscriptionData _subscriptionData;
 		private static string _resourceGroupName;
 		private static string _namespaceName;
 		private static string _eventHubName;
@@ -26,29 +25,31 @@ namespace CESLabManager
 		private static int _sasTokenExpirationDays;
 
 		private static List<string> _students;
-		private static ArmClient _armClient;
+		private static SubscriptionData _subscriptionData;
 		private static ResourceGroupResource _resourceGroup;
 
 		static async Task Main()
 		{
+			DisplayHeading();
+
 			if (!await InitializeApplication())
 			{
 				return;
 			}
 
+			Console.Clear();
+
 			var action = default(string);
 			do
 			{
-				Console.ForegroundColor = ConsoleColor.Cyan;
-				Console.WriteLine($"Change Event Stream (CES) Lab Manager");
-				Console.ResetColor();
+				DisplayHeading();
 				Console.WriteLine();
 				Console.ForegroundColor = ConsoleColor.White;
 				Console.WriteLine("Choose an action");
 				Console.ResetColor();
 				Console.WriteLine($"  V = View configuration");
 				Console.WriteLine($"  S = Show student list");
-				Console.WriteLine($"  L = List all namespaces");
+				Console.WriteLine($"  L = List all student namespaces");
 				Console.WriteLine($"  C = Create student namespaces");
 				Console.WriteLine($"  D = Delete student namespaces");
 				Console.WriteLine($"  G = Generate SAS access token");
@@ -108,8 +109,26 @@ namespace CESLabManager
 			} while (action != "Q");
 		}
 
+		private static void DisplayHeading()
+		{
+			Console.ForegroundColor = ConsoleColor.Cyan;
+			Console.WriteLine($"Change Event Stream (CES) Lab Manager");
+			Console.ResetColor();
+		}
+
 		private static async Task<bool> InitializeApplication()
 		{
+			var currentDir = AppContext.BaseDirectory + "\\..\\..\\..";
+			var studentsFilePath = Path.Combine(currentDir, "Students.txt");
+
+			if (!File.Exists(studentsFilePath))
+			{
+				Console.ForegroundColor = ConsoleColor.Red;
+				Console.WriteLine($"ERROR: Student list file not found at '{studentsFilePath}'");
+				Console.ResetColor();
+				return false;
+			}
+
 			var config = new ConfigurationBuilder()
 				.SetBasePath(Directory.GetCurrentDirectory())
 				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
@@ -121,25 +140,29 @@ namespace CESLabManager
 			_policyName = config["EventHub:PolicyName"];
 			_sasTokenExpirationDays = int.Parse(config["EventHub:SasTokenExpirationDays"]);
 
-			var currentDir = AppContext.BaseDirectory;
-			var studentsFilePath = Path.Combine(currentDir, "Students.txt");
-
-			if (!File.Exists(studentsFilePath))
-			{
-				Console.ForegroundColor = ConsoleColor.Red;
-				Console.WriteLine($"ERROR: Student list file not found at '{studentsFilePath}'");
-				return false;
-			}
-
 			_students = File.ReadAllLines(studentsFilePath) 
 				.Select(line => line.Trim())
 				.Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith("#"))
 				.ToList();
 
-			_armClient = new ArmClient(new AzureCliCredential());
-			var subscription = await _armClient.GetDefaultSubscriptionAsync();
-			_subscriptionData = subscription.Data;
-			_resourceGroup = await subscription.GetResourceGroups().GetAsync(_resourceGroupName);
+			var credential = new AzureCliCredential();      // requires that you first run `az login` in a terminal
+			var armClient = new ArmClient(credential);
+
+			try
+			{
+				var subscription = await armClient.GetDefaultSubscriptionAsync();
+				_subscriptionData = subscription.Data;
+
+				_resourceGroup = await subscription.GetResourceGroups().GetAsync(_resourceGroupName);
+			}
+			catch (Exception ex)
+			{
+				Console.ForegroundColor = ConsoleColor.Red;
+				Console.WriteLine("ERROR: Could not retrieve Azure resource information.");
+				Console.WriteLine(ex.Message);
+				Console.ResetColor();
+				return false;
+			}
 
 			ViewConfiguration();
 			return true;
@@ -186,130 +209,54 @@ namespace CESLabManager
 		private static async Task ListNamespaces()
 		{
 			Console.WriteLine();
+			Console.ForegroundColor = ConsoleColor.White;
 			Console.WriteLine($"Event Hub namespaces in resource group '{_resourceGroupName}':");
+			Console.ResetColor();
+			var counter = 0;
 			await foreach (var ns in _resourceGroup.GetEventHubsNamespaces().GetAllAsync())
 			{
-				Console.WriteLine(ns.Data.Name);
+				Console.WriteLine($"{++counter,3}. {ns.Data.Name}");
 			}
 		}
-
-		private static async Task CreateNamespaces0()
-		{
-			Console.Write("Are you sure you want to create namespaces for all students? (Y/N): ");
-			if (!Console.ReadLine().Trim().Equals("Y", StringComparison.OrdinalIgnoreCase)) return;
-
-			int skipped = 0, created = 0;
-			var outputLines = new List<string> { "Student,NamespaceName,SasToken" };
-
-			foreach (var student in _students)
-			{
-				var nsName = $"{_namespaceName}-{student}";
-				var nsCollection = _resourceGroup.GetEventHubsNamespaces();
-
-				if (await nsCollection.ExistsAsync(nsName))
-				{
-					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"Skipped (already exists): {nsName}");
-					skipped++;
-					continue;
-				}
-
-				Console.ForegroundColor = ConsoleColor.Green;
-				Console.WriteLine($"Creating namespace: {nsName}");
-
-				var nsData = new EventHubsNamespaceData("East US")
-				{
-					Sku = new EventHubsSku(EventHubsSkuName.Basic)
-				};
-				var nsResource = await nsCollection.CreateOrUpdateAsync(WaitUntil.Completed, nsName, nsData);
-
-				// Use Azure CLI to create Event Hub with Basic-tier compatible settings
-				var cliArgs = $"eventhubs eventhub create --resource-group {_resourceGroupName} " +
-					$"--namespace-name {nsName} --name {_eventHubName} " +
-					"--message-retention 1 --partition-count 2";
-
-				var psi = new System.Diagnostics.ProcessStartInfo
-				{
-					FileName = "az",
-					Arguments = cliArgs,
-					RedirectStandardOutput = true,
-					RedirectStandardError = true,
-					UseShellExecute = false,
-					CreateNoWindow = true
-				};
-
-				using var proc = System.Diagnostics.Process.Start(psi);
-				string output = await proc.StandardOutput.ReadToEndAsync();
-				string error = await proc.StandardError.ReadToEndAsync();
-				proc.WaitForExit();
-
-				if (proc.ExitCode != 0)
-				{
-					Console.ForegroundColor = ConsoleColor.Red;
-					Console.WriteLine($"Error creating Event Hub via CLI:\n{error}");
-					Console.ResetColor();
-					continue;
-				}
-
-				var eventHub = await nsResource.Value.GetEventHubs().GetAsync(_eventHubName);
-				var authRules = eventHub.Value.GetEventHubAuthorizationRules();
-				await authRules.CreateOrUpdateAsync(
-					WaitUntil.Completed,
-					_policyName,
-					new EventHubsAuthorizationRuleData
-					{
-						Rights =
-						{
-							EventHubsAccessRight.Listen,
-							EventHubsAccessRight.Send,
-							EventHubsAccessRight.Manage,
-						}
-					});
-
-				var token = await GenerateSasTokenAsync(nsName);
-				outputLines.Add($"{student},{nsName},{token}");
-				created++;
-			}
-
-			File.WriteAllLines("NamespaceTokens.csv", outputLines);
-			Console.ResetColor();
-			Console.WriteLine($"\nTotal Namespaces Created: {created}, Skipped: {skipped}");
-			Console.WriteLine("Token output written to NamespaceTokens.csv");
-		}
-
 
 		private static async Task CreateNamespaces()
 		{
+			Console.ForegroundColor = ConsoleColor.White;
 			Console.Write("Are you sure you want to create namespaces for all students? (Y/N): ");
-			if (!Console.ReadLine().Trim().Equals("Y", StringComparison.OrdinalIgnoreCase)) return;
+			Console.ResetColor();
+			if (Console.ReadLine().Trim().ToUpper() != "Y")
+			{
+				return;
+			}
 
-			int skipped = 0, created = 0;
+			var skipped = 0;
+			var created = 0;
 			var outputLines = new List<string> { "Student,NamespaceName,SasToken" };
 
 			foreach (var student in _students)
 			{
-				var nsName = $"{_namespaceName}-{student}";
-				var nsCollection = _resourceGroup.GetEventHubsNamespaces();
+				var namespaceName = $"{_namespaceName}-{student}";
+				var namespaceCollection = _resourceGroup.GetEventHubsNamespaces();
 
-				if (await nsCollection.ExistsAsync(nsName))
+				if (await namespaceCollection.ExistsAsync(namespaceName))
 				{
 					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"Skipped (already exists): {nsName}");
+					Console.WriteLine($"Skipped (already exists): {namespaceName}");
 					skipped++;
 					continue;
 				}
 
 				Console.ForegroundColor = ConsoleColor.Green;
-				Console.WriteLine($"Creating namespace: {nsName}");
+				Console.WriteLine($"Creating namespace: {namespaceName}");
 
-				var nsData = new EventHubsNamespaceData("East US")
-				{
-					Sku = new EventHubsSku(EventHubsSkuName.Basic)
-				};
-				var nsResource = await nsCollection.CreateOrUpdateAsync(WaitUntil.Completed, nsName, nsData);
+				var namespaceData = new EventHubsNamespaceData("Central US");
+				//{
+				//	Sku = new EventHubsSku(EventHubsSkuName.Basic)
+				//};
+				var namespaceResource = await namespaceCollection.CreateOrUpdateAsync(WaitUntil.Completed, namespaceName, namespaceData);
 
-				var ehCollection = nsResource.Value.GetEventHubs();
-				await ehCollection.CreateOrUpdateAsync(
+				var eventHubCollection = namespaceResource.Value.GetEventHubs();
+				await eventHubCollection.CreateOrUpdateAsync(
 					WaitUntil.Completed,
 					_eventHubName,
 					new EventHubData
@@ -321,7 +268,7 @@ namespace CESLabManager
 						},
 					});
 
-				var eventHub = await nsResource.Value.GetEventHubs().GetAsync(_eventHubName);
+				var eventHub = await namespaceResource.Value.GetEventHubs().GetAsync(_eventHubName);
 				var authRules = eventHub.Value.GetEventHubAuthorizationRules();
 				await authRules.CreateOrUpdateAsync(
 					WaitUntil.Completed,
@@ -336,12 +283,15 @@ namespace CESLabManager
 						}
 					});
 
-				var token = await GenerateSasTokenAsync(nsName);
-				outputLines.Add($"{student},{nsName},{token}");
+				var token = await GenerateSasTokenAsync(namespaceName);
+				outputLines.Add($"{student},{namespaceName},{token}");
 				created++;
 			}
 
-			File.WriteAllLines("NamespaceTokens.csv", outputLines);
+			var currentDir = AppContext.BaseDirectory + "\\..\\..\\..";
+			var outputPath = Path.Combine(currentDir, "StudentNamespaces.csv");
+
+			File.WriteAllLines(outputPath, outputLines);
 			Console.ResetColor();
 			Console.WriteLine($"\nTotal Namespaces Created: {created}, Skipped: {skipped}");
 			Console.WriteLine("Token output written to NamespaceTokens.csv");
@@ -349,8 +299,13 @@ namespace CESLabManager
 
 		private static async Task DeleteNamespaces()
 		{
+			Console.ForegroundColor = ConsoleColor.White;
 			Console.Write("Are you sure you want to delete all student namespaces? (Y/N): ");
-			if (!Console.ReadLine().Trim().Equals("Y", StringComparison.OrdinalIgnoreCase)) return;
+			Console.ResetColor();
+			if (Console.ReadLine().Trim().ToUpper() != "Y")
+			{
+				return;
+			}
 
 			int count = 0;
 			foreach (var student in _students)
