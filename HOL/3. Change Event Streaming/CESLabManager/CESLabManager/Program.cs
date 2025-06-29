@@ -213,9 +213,10 @@ namespace CESLabManager
 			Console.WriteLine($"Event Hub namespaces in resource group '{_resourceGroupName}':");
 			Console.ResetColor();
 			var counter = 0;
-			await foreach (var ns in _resourceGroup.GetEventHubsNamespaces().GetAllAsync())
+
+			await foreach (var eventHubsNamespace in _resourceGroup.GetEventHubsNamespaces().GetAllAsync())
 			{
-				Console.WriteLine($"{++counter,3}. {ns.Data.Name}");
+				Console.WriteLine($"{++counter,3}. {eventHubsNamespace.Data.Name}");
 			}
 		}
 
