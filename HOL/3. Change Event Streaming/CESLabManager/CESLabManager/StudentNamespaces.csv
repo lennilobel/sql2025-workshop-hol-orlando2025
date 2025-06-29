@@ -1,3 +1,0 @@
-Student,NamespaceName,SasToken
-john-smith,ces-namespace-john-smith,SharedAccessSignature sr=https%3A%2F%2Fces-namespace-john-smith.servicebus.windows.net%2Fces-hub&sig=uZyWm5MnqLN6wpEfwq6Oxos2MkjThDop%2Fb5TqQJ7RoY%3D&se=1751467126&skn=ces-policy
-lenni-lobel,ces-namespace-lenni-lobel,SharedAccessSignature sr=https%3A%2F%2Fces-namespace-lenni-lobel.servicebus.windows.net%2Fces-hub&sig=vXuLMsfidJrTK2DxS2pg4KzHk9u%2BlrzXYqoa%2FJuVXAo%3D&se=1751467129&skn=ces-policy
