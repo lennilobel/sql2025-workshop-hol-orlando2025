@@ -12,6 +12,7 @@ using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CESLabManager
@@ -220,7 +221,7 @@ namespace CESLabManager
 			}
 		}
 
-		private static async Task CreateNamespaces()
+		private static async Task CreateNamespacesV1()
 		{
 			Console.ForegroundColor = ConsoleColor.White;
 			Console.Write("Are you sure you want to create namespaces for all students? (Y/N): ");
@@ -306,6 +307,98 @@ namespace CESLabManager
 			Console.WriteLine($"Generated {outputPath}");
 		}
 
+		private static async Task CreateNamespaces()
+		{
+			Console.ForegroundColor = ConsoleColor.White;
+			Console.Write("Are you sure you want to create namespaces for all students? (Y/N): ");
+			Console.ResetColor();
+			if (Console.ReadLine().Trim().ToUpper() != "Y")
+			{
+				return;
+			}
+
+			var counter = 0;
+			var skipped = 0;
+			var created = 0;
+			var outputLines = new List<string> { "Student,NamespaceName,SasToken" };
+			var outputLock = new object();
+
+			var options = new ParallelOptions
+			{
+				MaxDegreeOfParallelism = 5 // Adjust based on system/network limits
+			};
+
+			Console.ForegroundColor = ConsoleColor.Green;
+			await Parallel.ForEachAsync(_students, options, async (student, cancellationToken) =>
+			{
+				Interlocked.Increment(ref counter);
+				Console.WriteLine($"{counter,-3}. {student}");
+
+				var namespaceName = $"{_namespaceName}-{student}";
+				var namespaceCollection = _resourceGroup.GetEventHubsNamespaces();
+
+				if (await namespaceCollection.ExistsAsync(namespaceName))
+				{
+					Console.ForegroundColor = ConsoleColor.Yellow;
+					Console.WriteLine($"Skipped (already exists): {namespaceName}");
+					Interlocked.Increment(ref skipped);
+					return;
+				}
+
+				var namespaceData = new EventHubsNamespaceData("Central US")
+				{
+					Sku = new EventHubsSku(EventHubsSkuName.Basic)
+				};
+
+				var namespaceResource = await namespaceCollection.CreateOrUpdateAsync(WaitUntil.Completed, namespaceName, namespaceData);
+
+				var eventHubCollection = namespaceResource.Value.GetEventHubs();
+				await eventHubCollection.CreateOrUpdateAsync(
+					WaitUntil.Completed,
+					_eventHubName,
+					new EventHubData
+					{
+						RetentionDescription = new RetentionDescription
+						{
+							CleanupPolicy = CleanupPolicyRetentionDescription.Delete,
+							RetentionTimeInHours = 1
+						},
+					});
+
+				var eventHub = await namespaceResource.Value.GetEventHubs().GetAsync(_eventHubName);
+
+				var authRules = eventHub.Value.GetEventHubAuthorizationRules();
+				await authRules.CreateOrUpdateAsync(
+					WaitUntil.Completed,
+					_policyName,
+					new EventHubsAuthorizationRuleData
+					{
+						Rights =
+						{
+							EventHubsAccessRight.Manage,
+							EventHubsAccessRight.Listen,
+							EventHubsAccessRight.Send,
+						}
+					});
+
+				var token = await GenerateSasTokenAsync(namespaceName);
+
+				lock (outputLock)
+				{
+					outputLines.Add($"{student},{namespaceName},{token}");
+				}
+				Interlocked.Increment(ref created);
+			});
+			Console.ResetColor();
+
+			var currentDir = AppContext.BaseDirectory + "\\..\\..\\..";
+			var outputPath = Path.Combine(currentDir, "StudentNamespaces.csv");
+
+			File.WriteAllLines(outputPath, outputLines);
+			Console.WriteLine($"\nTotal namespaces created: {created}, skipped: {skipped}");
+			Console.WriteLine($"Generated {outputPath}");
+		}
+
 		private static async Task DeleteNamespaces()
 		{
 			Console.ForegroundColor = ConsoleColor.White;
@@ -319,20 +412,20 @@ namespace CESLabManager
 			var count = 0;
 			foreach (var student in _students)
 			{
-				var nsName = $"{_namespaceName}-{student}";
-				var nsCollection = _resourceGroup.GetEventHubsNamespaces();
-				if (await nsCollection.ExistsAsync(nsName))
+				var namespaceName = $"{_namespaceName}-{student}";
+				var namespaceCollection = _resourceGroup.GetEventHubsNamespaces();
+				if (await namespaceCollection.ExistsAsync(namespaceName))
 				{
-					Console.WriteLine($"Deleting: {nsName}");
-					await nsCollection.Get(nsName).Value.DeleteAsync(WaitUntil.Completed);
+					Console.WriteLine($"Deleting: {namespaceName}");
+					await namespaceCollection.Get(namespaceName).Value.DeleteAsync(WaitUntil.Completed);
 					count++;
 				}
 				else
 				{
-					Console.WriteLine($"Skipped (not found): {nsName}");
+					Console.WriteLine($"Skipped (not found): {namespaceName}");
 				}
 			}
-			Console.WriteLine($"Total Namespaces Deleted: {count}");
+			Console.WriteLine($"Total namespaces deleted: {count}");
 		}
 
 		private static async Task GenerateAllSasTokens()
