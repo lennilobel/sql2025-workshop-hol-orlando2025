@@ -215,6 +215,8 @@ namespace CESLabManager
 			{
 				Console.WriteLine($"{++counter,3}. {eventHubsNamespace.Data.Name}");
 			}
+
+			Console.WriteLine($"\nTotal namespaces: {counter}");
 		}
 
 		private static async Task CreateNamespaces()
@@ -246,13 +248,13 @@ namespace CESLabManager
 				if (await namespaceCollection.ExistsAsync(namespaceName, cancellationToken))
 				{
 					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"{currentCounter,3}. {attendee} - skipped (namespace already exists)");
+					Console.WriteLine($"{currentCounter,3}. Skipping {namespaceName} (namespace already exists)");
 					Console.ForegroundColor = ConsoleColor.Green;
 					Interlocked.Increment(ref skipped);
 					return;
 				}
 
-				Console.WriteLine($"{currentCounter,3}. {attendee}");
+				Console.WriteLine($"{currentCounter,3}. Creating {namespaceName}");
 
 				// Create event hubs namespace
 
@@ -329,19 +331,30 @@ namespace CESLabManager
 			}
 
 			var counter = 0;
-
-			Console.ForegroundColor = ConsoleColor.Red;
-			await foreach (var eventHubsNamespace in _resourceGroup.GetEventHubsNamespaces().GetAllAsync())
+			var options = new ParallelOptions
 			{
-				var namespaceName = eventHubsNamespace.Data.Name;
-				Console.WriteLine($"{++counter,3}. {namespaceName}");
+				MaxDegreeOfParallelism = 5
+			};
 
-				var namespaceCollection = _resourceGroup.GetEventHubsNamespaces();
-
-				await namespaceCollection.Get(namespaceName).Value.DeleteAsync(WaitUntil.Completed);
+			var namespaceResources = new List<EventHubsNamespaceResource>();
+			await foreach (var namespaceResource in _resourceGroup.GetEventHubsNamespaces().GetAllAsync())
+			{
+				namespaceResources.Add(namespaceResource);
 			}
 
+			Console.ForegroundColor = ConsoleColor.Red;
+			await Parallel.ForEachAsync(namespaceResources, options, async (eventHubsNamespace, cancellationToken) =>
+			{
+				var currentCounter = Interlocked.Increment(ref counter);
+				var namespaceName = eventHubsNamespace.Data.Name;
+
+				Console.WriteLine($"{currentCounter,3}. Deleting: {namespaceName}");
+
+				await eventHubsNamespace.DeleteAsync(WaitUntil.Completed, cancellationToken);
+			});
 			Console.ResetColor();
+
+			Console.WriteLine($"\nTotal namespaces deleted: {counter}");
 		}
 
 		private static async Task<string> GenerateSasTokenAsync(string namespaceName)
