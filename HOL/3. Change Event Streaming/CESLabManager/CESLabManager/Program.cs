@@ -286,9 +286,9 @@ namespace CESLabManager
 					{
 						Rights =
 						{
-							//EventHubsAccessRight.Listen,
-							//EventHubsAccessRight.Send,
 							EventHubsAccessRight.Manage,
+ 							EventHubsAccessRight.Listen,
+							EventHubsAccessRight.Send,
 						}
 					});
 
