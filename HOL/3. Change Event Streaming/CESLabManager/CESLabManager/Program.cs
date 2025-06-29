@@ -19,6 +19,8 @@ namespace CESLabManager
 {
 	public class Program
 	{
+		private const int MaxDop = 6;	// Too large a number can result in diminishing returns, Azure rate limiting, and/or throttling with 429 (too many requests) errors
+
 		private static string _resourceGroupName;
 		private static string _namespaceName;
 		private static string _eventHubName;
@@ -228,11 +230,7 @@ namespace CESLabManager
 			var created = 0;
 			var outputLines = new List<string> { "Attendee,NamespaceName,SasToken" };
 			var outputLock = new object();
-
-			var options = new ParallelOptions
-			{
-				MaxDegreeOfParallelism = 5 // Too large a number can overwhelm Azure
-			};
+			var options = new ParallelOptions { MaxDegreeOfParallelism = MaxDop };
 
 			var started = DateTime.Now;
 			Console.ForegroundColor = ConsoleColor.Green;
@@ -350,10 +348,7 @@ namespace CESLabManager
 			}
 
 			var counter = 0;
-			var options = new ParallelOptions
-			{
-				MaxDegreeOfParallelism = 5
-			};
+			var options = new ParallelOptions { MaxDegreeOfParallelism = MaxDop };
 
 			var started = DateTime.Now;
 			Console.ForegroundColor = ConsoleColor.Red;
