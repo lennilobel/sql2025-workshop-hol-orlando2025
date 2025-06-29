@@ -1,0 +1,3 @@
+Attendee,NamespaceName,SasToken
+lenni-lobel,ces-namespace-lenni-lobel,SharedAccessSignature sr=https%3A%2F%2Fces-namespace-lenni-lobel.servicebus.windows.net%2Fces-hub&sig=IpwowJChmJ%2BrecdeBBH1tVsuyMbLPPnPHlIRU4u8UTI%3D&se=1751476899&skn=ces-policy
+john-smith01,ces-namespace-john-smith01,SharedAccessSignature sr=https%3A%2F%2Fces-namespace-john-smith01.servicebus.windows.net%2Fces-hub&sig=PN%2FbJ33BAmA0is6JPle31Qk30HAeROZQh48wMqOH%2Fcg%3D&se=1751476899&skn=ces-policy

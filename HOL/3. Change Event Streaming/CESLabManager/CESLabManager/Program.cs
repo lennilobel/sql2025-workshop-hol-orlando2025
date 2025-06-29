@@ -66,7 +66,7 @@ namespace CESLabManager
 							ViewConfiguration();
 							break;
 
-						case "S":
+						case "A":
 							ShowAttendeeList();
 							break;
 
@@ -238,7 +238,7 @@ namespace CESLabManager
 			Console.ForegroundColor = ConsoleColor.Green;
 			await Parallel.ForEachAsync(_attendees, options, async (attendee, cancellationToken) =>
 			{
-				Interlocked.Increment(ref counter);
+				var currentCounter = Interlocked.Increment(ref counter);
 
 				var namespaceName = $"{_namespaceName}-{attendee}";
 				var namespaceCollection = _resourceGroup.GetEventHubsNamespaces();
@@ -246,13 +246,13 @@ namespace CESLabManager
 				if (await namespaceCollection.ExistsAsync(namespaceName, cancellationToken))
 				{
 					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"{counter,3}. {attendee} - skipped (namespace already exists)");
+					Console.WriteLine($"{currentCounter,3}. {attendee} - skipped (namespace already exists)");
 					Console.ForegroundColor = ConsoleColor.Green;
 					Interlocked.Increment(ref skipped);
 					return;
 				}
 
-				Console.WriteLine($"{counter,3}. {attendee}");
+				Console.WriteLine($"{currentCounter,3}. {attendee}");
 
 				// Create event hubs namespace
 
@@ -310,7 +310,13 @@ namespace CESLabManager
 			var currentDir = AppContext.BaseDirectory + "\\..\\..\\..";
 			var outputPath = Path.Combine(currentDir, "AttendeeNamespaces.csv");
 
-			File.WriteAllLines(outputPath, outputLines);
+			var sortedLines = outputLines
+				.Skip(1)
+				.OrderBy(line => line.Split(',')[0]) // Sort by attendee
+				.Prepend(outputLines[0]) // Re-add header
+				.ToList();
+
+			File.WriteAllLines(outputPath, sortedLines);
 			Console.WriteLine($"\nTotal namespaces created: {created}, skipped: {skipped}");
 			Console.WriteLine($"Generated {outputPath}");
 		}
