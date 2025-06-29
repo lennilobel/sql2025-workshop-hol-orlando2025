@@ -278,25 +278,25 @@ namespace CESLabManager
 					},
 				};
 
-				await eventHubCollection.CreateOrUpdateAsync(WaitUntil.Completed, _eventHubName, eventHubData, cancellationToken);
+				var eventHub = await eventHubCollection.CreateOrUpdateAsync(WaitUntil.Completed, _eventHubName, eventHubData, cancellationToken);
 
-				// Create event hub
-
-				var eventHub = await eventHubCollection.GetAsync(_eventHubName, cancellationToken);
+				// Create event hub authorization rule (policy)
 
 				var eventHubRuleData = new EventHubsAuthorizationRuleData
 				{
 					Rights =
-						{
-							EventHubsAccessRight.Manage,
-							EventHubsAccessRight.Listen,
-							EventHubsAccessRight.Send,
-						}
+					{
+						EventHubsAccessRight.Manage,
+						EventHubsAccessRight.Listen,
+						EventHubsAccessRight.Send,
+					}
 				};
 
-				var authRules = eventHub.Value.GetEventHubAuthorizationRules();
+				var authorizationRules = eventHub.Value.GetEventHubAuthorizationRules();
 
-				await authRules.CreateOrUpdateAsync(WaitUntil.Completed, _policyName, eventHubRuleData, cancellationToken);
+				await authorizationRules.CreateOrUpdateAsync(WaitUntil.Completed, _policyName, eventHubRuleData, cancellationToken);
+
+				// Generate SAS token
 
 				var token = await GenerateSasTokenAsync(namespaceName);
 
