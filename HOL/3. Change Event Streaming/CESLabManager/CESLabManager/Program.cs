@@ -26,8 +26,8 @@ namespace CESLabManager
 		private static int _sasTokenExpirationDays;
 
 		private static List<string> _students;
-		private static EventHubsNamespaceResource _namespaceResource;
-		private static EventHubResource _eventHubResource;
+		private static ArmClient _armClient;
+		private static ResourceGroupResource _resourceGroup;
 
 		static async Task Main()
 		{
@@ -41,7 +41,6 @@ namespace CESLabManager
 			{
 				Console.ForegroundColor = ConsoleColor.Cyan;
 				Console.WriteLine($"Change Event Stream (CES) Lab Manager");
-				Console.WriteLine($"Current Tier: {_namespaceResource.Data.Sku.Name}");
 				Console.ResetColor();
 				Console.WriteLine();
 				Console.ForegroundColor = ConsoleColor.White;
@@ -49,10 +48,9 @@ namespace CESLabManager
 				Console.ResetColor();
 				Console.WriteLine($"  V = View configuration");
 				Console.WriteLine($"  S = Show student list");
-				Console.WriteLine($"  L = List all consumer groups");
-				Console.WriteLine($"  C = Create student consumer groups");
-				Console.WriteLine($"  D = Delete student consumer groups");
-				Console.WriteLine($"  T = Toggle pricing tier ({(_namespaceResource.Data.Sku.Name == "Standard" ? "Standard -> Basic" : "Basic -> Standard")})");
+				Console.WriteLine($"  L = List all namespaces");
+				Console.WriteLine($"  C = Create student namespaces");
+				Console.WriteLine($"  D = Delete student namespaces");
 				Console.WriteLine($"  G = Generate SAS access token");
 				Console.WriteLine($"  Q = Quit");
 				Console.WriteLine();
@@ -72,23 +70,19 @@ namespace CESLabManager
 							break;
 
 						case "L":
-							await ListConsumerGroups();
+							await ListNamespaces();
 							break;
 
 						case "C":
-							await CreateConsumerGroups();
+							await CreateNamespaces();
 							break;
 
 						case "D":
-							await DeleteConsumerGroups();
-							break;
-
-						case "T":
-							await ToggleSku();
+							await DeleteNamespaces();
 							break;
 
 						case "G":
-							await GenerateSasToken();
+							await GenerateAllSasTokens();
 							break;
 
 						case "Q":
@@ -137,34 +131,17 @@ namespace CESLabManager
 				return false;
 			}
 
-			_students = File.ReadAllLines(studentsFilePath)
+			_students = File.ReadAllLines(studentsFilePath) 
 				.Select(line => line.Trim())
 				.Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith("#"))
 				.ToList();
 
-			var credential = new AzureCliCredential();      // requires that you first run `az login` in a terminal
-			var armClient = new ArmClient(credential);
-
-			try
-			{
-				var subscription = await armClient.GetDefaultSubscriptionAsync();
-				_subscriptionData = subscription.Data;
-
-				var resourceGroup = await subscription.GetResourceGroups().GetAsync(_resourceGroupName);
-				_namespaceResource = await resourceGroup.Value.GetEventHubsNamespaces().GetAsync(_namespaceName);
-				_eventHubResource = await _namespaceResource.GetEventHubs().GetAsync(_eventHubName);
-			}
-			catch (Exception ex)
-			{
-				Console.ForegroundColor = ConsoleColor.Red;
-				Console.WriteLine("ERROR: Could not retrieve Azure resource information.");
-				Console.WriteLine(ex.Message);
-				Console.ResetColor();
-				return false;
-			}
+			_armClient = new ArmClient(new AzureCliCredential());
+			var subscription = await _armClient.GetDefaultSubscriptionAsync();
+			_subscriptionData = subscription.Data;
+			_resourceGroup = await subscription.GetResourceGroups().GetAsync(_resourceGroupName);
 
 			ViewConfiguration();
-
 			return true;
 		}
 
@@ -206,234 +183,230 @@ namespace CESLabManager
 			Console.WriteLine($"Total Students: {_students.Count}");
 		}
 
-		private static async Task<List<string>> GetConsumerGroupNames()
+		private static async Task ListNamespaces()
 		{
 			Console.WriteLine();
-
-			var list = new List<string>();
-			await foreach (var group in _eventHubResource.GetEventHubsConsumerGroups().GetAllAsync())
+			Console.WriteLine($"Event Hub namespaces in resource group '{_resourceGroupName}':");
+			await foreach (var ns in _resourceGroup.GetEventHubsNamespaces().GetAllAsync())
 			{
-				list.Add(group.Data.Name);
+				Console.WriteLine(ns.Data.Name);
 			}
-
-			return list;
 		}
 
-		private static async Task ListConsumerGroups()
+		private static async Task CreateNamespaces0()
 		{
-			Console.WriteLine();
-			Console.WriteLine($"Listing all consumer groups in '{_eventHubName}':");
+			Console.Write("Are you sure you want to create namespaces for all students? (Y/N): ");
+			if (!Console.ReadLine().Trim().Equals("Y", StringComparison.OrdinalIgnoreCase)) return;
 
-			var groups = await GetConsumerGroupNames();
-
-			Console.ForegroundColor = ConsoleColor.Green;
-			foreach (var group in groups)
-			{
-				Console.WriteLine(group);
-			}
-			Console.ResetColor();
-
-			Console.WriteLine();
-			Console.WriteLine($"Total Consumer Groups: {groups.Count}");
-		}
-
-		private static async Task CreateConsumerGroups()
-		{
-			Console.WriteLine();
-
-			if (_namespaceResource.Data.Sku.Name == "Basic")
-			{
-				Console.ForegroundColor = ConsoleColor.Red;
-				Console.WriteLine("Cannot create consumer groups for Basic SKU; first toggle the SKU to Standard");
-				Console.ResetColor();
-				return;
-			}
-
-			Console.Write("Are you sure you want to create all student consumer groups? (Y/N): ");
-			if (!Console.ReadLine().Trim().Equals("Y", StringComparison.OrdinalIgnoreCase))
-			{
-				return;
-			}
-
-			var existing = await GetConsumerGroupNames();
-			var count = 0;
+			int skipped = 0, created = 0;
+			var outputLines = new List<string> { "Student,NamespaceName,SasToken" };
 
 			foreach (var student in _students)
 			{
-				var name = $"cg-{student}";
-				if (existing.Contains(name))
+				var nsName = $"{_namespaceName}-{student}";
+				var nsCollection = _resourceGroup.GetEventHubsNamespaces();
+
+				if (await nsCollection.ExistsAsync(nsName))
 				{
 					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"Skipped (already exists): {name}");
-				}
-				else
-				{
-					Console.ForegroundColor = ConsoleColor.Green;
-					Console.WriteLine($"Creating Consumer Group: {name}");
-					try
-					{
-						await _eventHubResource.GetEventHubsConsumerGroups().CreateOrUpdateAsync(WaitUntil.Completed, name, new EventHubsConsumerGroupData());
-					}
-					catch (Exception ex)
-					{
-						Console.ForegroundColor = ConsoleColor.Red;
-						Console.WriteLine($"Error creating consumer group '{name}': {ex.Message}");
-						continue;
-					}
-					count++;
-				}
-			}
-
-			Console.ResetColor();
-			Console.WriteLine();
-			Console.WriteLine($"Total Consumer Groups Created: {count}");
-		}
-
-		private static async Task DeleteConsumerGroups()
-		{
-			Console.WriteLine();
-
-			Console.Write("Are you sure you want to delete all student consumer groups? (Y/N): ");
-			if (!Console.ReadLine().Trim().Equals("Y", StringComparison.OrdinalIgnoreCase))
-			{
-				return;
-			}
-
-			var existing = await GetConsumerGroupNames();
-			var count = 0;
-
-			foreach (var student in _students)
-			{
-				var name = $"cg-{student}";
-				if (existing.Contains(name))
-				{
-					Console.ForegroundColor = ConsoleColor.Green;
-					Console.WriteLine($"Deleting Consumer Group: {name}");
-					await _eventHubResource.GetEventHubsConsumerGroups().Get(name).Value.DeleteAsync(WaitUntil.Completed);
-					count++;
-				}
-				else
-				{
-					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"Skipped (not found): {name}");
-				}
-			}
-
-			Console.ResetColor();
-
-			Console.WriteLine();
-			Console.WriteLine($"Total Consumer Groups Deleted: {count}");
-		}
-
-		private static async Task ToggleSku()
-		{
-			Console.WriteLine();
-
-			var currentSku = _namespaceResource.Data.Sku.Name;
-
-			Console.Write($"Are you sure you want to toggle the SKU from {currentSku}? (Y/N): ");
-			if (!Console.ReadLine().Trim().Equals("Y", StringComparison.OrdinalIgnoreCase))
-			{
-				return;
-			}
-
-			Console.WriteLine();
-			Console.WriteLine($"Toggling pricing tier for Event Hub Namespace '{_namespaceName}' (Current Tier: {currentSku})");
-
-			if (currentSku == "Standard")
-			{
-				Console.ForegroundColor = ConsoleColor.Yellow;
-				Console.WriteLine("Current tier is Standard. Preparing to downgrade to Basic...");
-
-				await foreach (var group in _eventHubResource.GetEventHubsConsumerGroups().GetAllAsync())
-				{
-					if (group.Data.Name != "$Default")
-					{
-						Console.ForegroundColor = ConsoleColor.Red;
-						Console.WriteLine($"Deleting Consumer Group: {group.Data.Name}");
-						await group.DeleteAsync(WaitUntil.Completed);
-					}
+					Console.WriteLine($"Skipped (already exists): {nsName}");
+					skipped++;
+					continue;
 				}
 
-				Console.WriteLine("Updating tier to Basic...");
-
-				var data = _namespaceResource.Data;
-				data.Sku = new EventHubsSku("Basic");
-				_namespaceResource = await _namespaceResource.UpdateAsync(data);
-			}
-			else if (currentSku == "Basic")
-			{
 				Console.ForegroundColor = ConsoleColor.Green;
-				Console.WriteLine("Current tier is Basic. Upgrading to Standard...");
+				Console.WriteLine($"Creating namespace: {nsName}");
 
-				var data = _namespaceResource.Data;
-				data.Sku = new EventHubsSku("Standard");
+				var nsData = new EventHubsNamespaceData("East US")
+				{
+					Sku = new EventHubsSku(EventHubsSkuName.Basic)
+				};
+				var nsResource = await nsCollection.CreateOrUpdateAsync(WaitUntil.Completed, nsName, nsData);
 
-				_namespaceResource = await _namespaceResource.UpdateAsync(data);
+				// Use Azure CLI to create Event Hub with Basic-tier compatible settings
+				var cliArgs = $"eventhubs eventhub create --resource-group {_resourceGroupName} " +
+					$"--namespace-name {nsName} --name {_eventHubName} " +
+					"--message-retention 1 --partition-count 2";
+
+				var psi = new System.Diagnostics.ProcessStartInfo
+				{
+					FileName = "az",
+					Arguments = cliArgs,
+					RedirectStandardOutput = true,
+					RedirectStandardError = true,
+					UseShellExecute = false,
+					CreateNoWindow = true
+				};
+
+				using var proc = System.Diagnostics.Process.Start(psi);
+				string output = await proc.StandardOutput.ReadToEndAsync();
+				string error = await proc.StandardError.ReadToEndAsync();
+				proc.WaitForExit();
+
+				if (proc.ExitCode != 0)
+				{
+					Console.ForegroundColor = ConsoleColor.Red;
+					Console.WriteLine($"Error creating Event Hub via CLI:\n{error}");
+					Console.ResetColor();
+					continue;
+				}
+
+				var eventHub = await nsResource.Value.GetEventHubs().GetAsync(_eventHubName);
+				var authRules = eventHub.Value.GetEventHubAuthorizationRules();
+				await authRules.CreateOrUpdateAsync(
+					WaitUntil.Completed,
+					_policyName,
+					new EventHubsAuthorizationRuleData
+					{
+						Rights =
+						{
+							EventHubsAccessRight.Listen,
+							EventHubsAccessRight.Send,
+							EventHubsAccessRight.Manage,
+						}
+					});
+
+				var token = await GenerateSasTokenAsync(nsName);
+				outputLines.Add($"{student},{nsName},{token}");
+				created++;
 			}
-			else
-			{
-				Console.ForegroundColor = ConsoleColor.Red;
-				Console.WriteLine($"Unsupported SKU type: {currentSku}");
-			}
 
-			_namespaceResource = await _namespaceResource.GetAsync(); // refresh
+			File.WriteAllLines("NamespaceTokens.csv", outputLines);
 			Console.ResetColor();
-			Console.WriteLine($"Updated pricing tier: {_namespaceResource.Data.Sku.Name}");
+			Console.WriteLine($"\nTotal Namespaces Created: {created}, Skipped: {skipped}");
+			Console.WriteLine("Token output written to NamespaceTokens.csv");
 		}
 
-		private static async Task GenerateSasToken()
+
+		private static async Task CreateNamespaces()
 		{
-			Console.WriteLine();
+			Console.Write("Are you sure you want to create namespaces for all students? (Y/N): ");
+			if (!Console.ReadLine().Trim().Equals("Y", StringComparison.OrdinalIgnoreCase)) return;
 
-			var authRules = _eventHubResource.GetEventHubAuthorizationRules();
-			var policy = default(EventHubAuthorizationRuleResource);
+			int skipped = 0, created = 0;
+			var outputLines = new List<string> { "Student,NamespaceName,SasToken" };
 
-			try
+			foreach (var student in _students)
 			{
-				policy = await authRules.GetAsync(_policyName);
+				var nsName = $"{_namespaceName}-{student}";
+				var nsCollection = _resourceGroup.GetEventHubsNamespaces();
+
+				if (await nsCollection.ExistsAsync(nsName))
+				{
+					Console.ForegroundColor = ConsoleColor.Yellow;
+					Console.WriteLine($"Skipped (already exists): {nsName}");
+					skipped++;
+					continue;
+				}
+
+				Console.ForegroundColor = ConsoleColor.Green;
+				Console.WriteLine($"Creating namespace: {nsName}");
+
+				var nsData = new EventHubsNamespaceData("East US")
+				{
+					Sku = new EventHubsSku(EventHubsSkuName.Basic)
+				};
+				var nsResource = await nsCollection.CreateOrUpdateAsync(WaitUntil.Completed, nsName, nsData);
+
+				var ehCollection = nsResource.Value.GetEventHubs();
+				await ehCollection.CreateOrUpdateAsync(
+					WaitUntil.Completed,
+					_eventHubName,
+					new EventHubData
+					{
+						RetentionDescription = new RetentionDescription
+						{
+							CleanupPolicy = CleanupPolicyRetentionDescription.Delete,
+							RetentionTimeInHours = 1
+						},
+					});
+
+				var eventHub = await nsResource.Value.GetEventHubs().GetAsync(_eventHubName);
+				var authRules = eventHub.Value.GetEventHubAuthorizationRules();
+				await authRules.CreateOrUpdateAsync(
+					WaitUntil.Completed,
+					_policyName,
+					new EventHubsAuthorizationRuleData
+					{
+						Rights =
+						{
+							EventHubsAccessRight.Listen,
+							EventHubsAccessRight.Send,
+							EventHubsAccessRight.Manage,
+						}
+					});
+
+				var token = await GenerateSasTokenAsync(nsName);
+				outputLines.Add($"{student},{nsName},{token}");
+				created++;
 			}
-			catch (RequestFailedException ex) when (ex.Status == 404)
+
+			File.WriteAllLines("NamespaceTokens.csv", outputLines);
+			Console.ResetColor();
+			Console.WriteLine($"\nTotal Namespaces Created: {created}, Skipped: {skipped}");
+			Console.WriteLine("Token output written to NamespaceTokens.csv");
+		}
+
+		private static async Task DeleteNamespaces()
+		{
+			Console.Write("Are you sure you want to delete all student namespaces? (Y/N): ");
+			if (!Console.ReadLine().Trim().Equals("Y", StringComparison.OrdinalIgnoreCase)) return;
+
+			int count = 0;
+			foreach (var student in _students)
 			{
-				Console.ForegroundColor = ConsoleColor.Red;
-				Console.WriteLine($"ERROR: Policy '{_policyName}' does not exist.");
-				return;
+				var nsName = $"{_namespaceName}-{student}";
+				var nsCollection = _resourceGroup.GetEventHubsNamespaces();
+				if (await nsCollection.ExistsAsync(nsName))
+				{
+					Console.WriteLine($"Deleting: {nsName}");
+					await nsCollection.Get(nsName).Value.DeleteAsync(WaitUntil.Completed);
+					count++;
+				}
+				else
+				{
+					Console.WriteLine($"Skipped (not found): {nsName}");
+				}
 			}
+			Console.WriteLine($"Total Namespaces Deleted: {count}");
+		}
 
-			var keys = await policy.GetKeysAsync();
-			var primaryKey = keys.Value.PrimaryKey;
-
-			if (string.IsNullOrEmpty(primaryKey))
+		private static async Task GenerateAllSasTokens()
+		{
+			foreach (var student in _students)
 			{
-				Console.ForegroundColor = ConsoleColor.Red;
-				Console.WriteLine("Primary key is empty. Cannot generate SAS token.");
-				Console.ResetColor();
-				return;
+				var nsName = $"{_namespaceName}-{student}";
+				var token = await GenerateSasTokenAsync(nsName);
+				Console.WriteLine($"{student}: {token}\n");
 			}
+		}
 
-			var resourceUri = $"https://{_namespaceName}.servicebus.windows.net/{_eventHubName}";
+		private static async Task<string> GenerateSasTokenAsync(string nsName)
+		{
+			// Build the full URI to the Event Hub within the namespace
+			var resourceUri = $"https://{nsName}.servicebus.windows.net/{_eventHubName}";
 			var encodedUri = WebUtility.UrlEncode(resourceUri);
 
+			// Calculate expiry time in seconds since epoch
 			var expiry = (int)(DateTime.UtcNow.AddDays(_sasTokenExpirationDays) - new DateTime(1970, 1, 1)).TotalSeconds;
 			var stringToSign = $"{encodedUri}\n{expiry}";
 
-			using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(primaryKey));
+			// Get the EventHub resource
+			var ns = await _resourceGroup.GetEventHubsNamespaces().GetAsync(nsName);
+			var eventHub = await ns.Value.GetEventHubs().GetAsync(_eventHubName);
+			var policy = await eventHub.Value.GetEventHubAuthorizationRules().GetAsync(_policyName);
+			var key = (await policy.Value.GetKeysAsync()).Value.PrimaryKey;
+
+			if (string.IsNullOrEmpty(key))
+			{
+				throw new InvalidOperationException($"Primary key for policy '{_policyName}' is null or empty.");
+			}
+
+			using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(key));
 			var signature = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(stringToSign)));
 			var encodedSig = WebUtility.UrlEncode(signature);
 
-			var sasToken = $"SharedAccessSignature sr={encodedUri}&sig={encodedSig}&se={expiry}&skn={_policyName}";
-
-			Console.ForegroundColor = ConsoleColor.Cyan;
-			Console.WriteLine("-- Generated SAS Token --");
-			Console.ResetColor();
-			Console.WriteLine(sasToken);
-			Console.ForegroundColor = ConsoleColor.Cyan;
-			Console.WriteLine("-- End of generated SAS Token --");
-			Console.ResetColor();
-			Console.WriteLine();
-			Console.ForegroundColor = ConsoleColor.Yellow;
-			Console.WriteLine($"NOTE: This token expires in {_sasTokenExpirationDays} day(s).");
-			Console.ResetColor();
+			return $"SharedAccessSignature sr={encodedUri}&sig={encodedSig}&se={expiry}&skn={_policyName}";
 		}
 
 	}
