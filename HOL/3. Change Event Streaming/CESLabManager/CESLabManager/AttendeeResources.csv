@@ -1,3 +1,4 @@
 AttendeeName,SqlDatabaseServerName,EventHubNamespaceName,EventHubSasToken,StorageAccountConnectionString
-lenni-lobel,sql-lenni-lobel,ces-namespace-lenni-lobel,SharedAccessSignature sr=https%3A%2F%2Fces-namespace-lenni-lobel.servicebus.windows.net%2Fces-hub&sig=8u5jhgr1b7oY97GZDyvlKYvOAXjImXiN8U2VaFiYhzU%3D&se=1756942033&skn=ces-policy,
-mark-white,sql-mark-white,ces-namespace-mark-white,SharedAccessSignature sr=https%3A%2F%2Fces-namespace-mark-white.servicebus.windows.net%2Fces-hub&sig=Tf5bL8oYnFwCG%2FEhi6rU%2FgljHDHeStBCJXDgumA6bbM%3D&se=1756942033&skn=ces-policy,
+john-doe,sql-john-doe,eh-john-doe,SharedAccessSignature sr=https%3A%2F%2Feh-john-doe.servicebus.windows.net%2Fces-hub&sig=fZzo8%2BKa%2BxDnnNzrSTnCALAXXX6H9CWFyf0sKvCRfyM%3D&se=1756943034&skn=ces-policy,
+lenni-lobel,sql-lenni-lobel,eh-lenni-lobel,SharedAccessSignature sr=https%3A%2F%2Feh-lenni-lobel.servicebus.windows.net%2Fces-hub&sig=qVxFM6oin2lpyT5jUOdMQUEyMr4o%2BDOy33kBMklURm8%3D&se=1756943034&skn=ces-policy,
+mark-white,sql-mark-white,eh-mark-white,SharedAccessSignature sr=https%3A%2F%2Feh-mark-white.servicebus.windows.net%2Fces-hub&sig=LLoDk1e7pEFNNw6MmW06h48fcTuWG8cqtfsqxj64FVY%3D&se=1756943034&skn=ces-policy,
