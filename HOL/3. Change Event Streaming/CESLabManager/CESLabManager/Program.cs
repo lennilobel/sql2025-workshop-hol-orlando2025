@@ -260,53 +260,67 @@ namespace SqlHolWorkshopLabManager
 				return;
 			}
 
-			var counter = 0;
 			var created = 0;
 			var outputLines = new List<string> { "AttendeeName,SqlDatabaseServerName,EventHubNamespaceName,EventHubSasToken,StorageAccountConnectionString" };
 			var outputLock = new object();
 			var options = new ParallelOptions { MaxDegreeOfParallelism = MaxDop };
 
 			var started = DateTime.Now;
+			var counter = 0;
+
 			Console.ForegroundColor = ConsoleColor.Green;
-			await Parallel.ForEachAsync(attendeeNames, options, async (attendeeName, cancellationToken) =>
+
+			await Parallel.ForEachAsync(attendeeNames, options, async (name, cancellationToken) =>
 			{
-				var attendeeInfo = new AttendeeInfo(attendeeName);
+				var attendeeInfo = new AttendeeInfo(name);
 
-				counter = Interlocked.Increment(ref counter);
-				await CreateSqlDatabaseServer(attendeeInfo, counter, cancellationToken);
-
-				counter = Interlocked.Increment(ref counter);
-				await CreateEventHubResources(attendeeInfo, counter, cancellationToken);
-
-				lock (outputLock)
+				try
 				{
-					outputLines.Add($"{attendeeName},{attendeeInfo.SqlDatabaseServerName},{attendeeInfo.EventHubNamespaceName},{attendeeInfo.EventHubSasToken},{attendeeInfo.StorageAccountConnectionString}");
+					var sqlDatabaseTask = CreateSqlDatabaseServer(attendeeInfo, Interlocked.Increment(ref counter), cancellationToken);
+					var eventHubTask = CreateEventHubResources(attendeeInfo, Interlocked.Increment(ref counter), cancellationToken);
+
+					await Task.WhenAll(sqlDatabaseTask, eventHubTask);
+
+					lock (outputLock)
+					{
+						outputLines.Add($"{name},{attendeeInfo.SqlDatabaseServerName},{attendeeInfo.EventHubNamespaceName},{attendeeInfo.EventHubSasToken},{attendeeInfo.StorageAccountConnectionString}");
+					}
+					Interlocked.Increment(ref created);
+				}
+				catch (Exception ex)
+				{
+					var current = Interlocked.Increment(ref counter);
+					Console.ForegroundColor = ConsoleColor.Yellow;
+					Console.WriteLine($"{current,3}. Error creating resources for attendee '{name}': {ex.Message}");
+					Console.ForegroundColor = ConsoleColor.Green;
 				}
 			});
-			Console.ResetColor();
-			var elapsed = DateTime.Now.Subtract(started);
 
-			var currentDir = AppContext.BaseDirectory + "\\..\\..\\..";
-			var outputPath = Path.Combine(currentDir, "AttendeeResources.csv");
+			Console.ResetColor();
+
+			var elapsed = DateTime.Now.Subtract(started);
 
 			var sortedLines = outputLines
 				.Skip(1)
-				.OrderBy(line => line.Split(',')[0]) // Sort by attendee
-				.Prepend(outputLines[0]) // Re-add header
+				.OrderBy(line => line.Split(',')[0])
+				.Prepend(outputLines[0])
 				.ToList();
 
 			Console.WriteLine();
 			Console.ForegroundColor = ConsoleColor.White;
-			counter = 0;
+			var lineCounter = 0;
 			foreach (var line in sortedLines)
 			{
-				Console.WriteLine($"{++counter,3}. {line}");
+				Console.WriteLine($"{++lineCounter,3}. {line}");
 			}
 			Console.ResetColor();
 			Console.WriteLine();
 
+			var currentDir = AppContext.BaseDirectory + "\\..\\..\\..";
+			var outputPath = Path.Combine(currentDir, "AttendeeResources.csv");
 			File.WriteAllLines(outputPath, sortedLines);
-			Console.WriteLine($"\nCreated {created} attendee resource(s) in {elapsed}"); 
+
+			Console.WriteLine($"\nProcessed {attendeeNames.Length} attendee(s); successfully created resources for {created} attendee(s) in {elapsed}");
 			Console.WriteLine($"Generated {outputPath}");
 		}
 

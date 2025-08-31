@@ -1,3 +1,3 @@
 AttendeeName,SqlDatabaseServerName,EventHubNamespaceName,EventHubSasToken,StorageAccountConnectionString
-lenni-lobel,sql-lenni-lobel,ces-namespace-lenni-lobel,SharedAccessSignature sr=https%3A%2F%2Fces-namespace-lenni-lobel.servicebus.windows.net%2Fces-hub&sig=sJKS5PkhSX2YLdy7Hke4YpFmBWIWg80hH6w0I97%2FQ5A%3D&se=1756941492&skn=ces-policy,
-mark-white,sql-mark-white,ces-namespace-mark-white,SharedAccessSignature sr=https%3A%2F%2Fces-namespace-mark-white.servicebus.windows.net%2Fces-hub&sig=iArJ9yGinl43oLkO3oabaBnnce8Robc4tAYitiB%2FVxg%3D&se=1756941492&skn=ces-policy,
+lenni-lobel,sql-lenni-lobel,ces-namespace-lenni-lobel,SharedAccessSignature sr=https%3A%2F%2Fces-namespace-lenni-lobel.servicebus.windows.net%2Fces-hub&sig=8u5jhgr1b7oY97GZDyvlKYvOAXjImXiN8U2VaFiYhzU%3D&se=1756942033&skn=ces-policy,
+mark-white,sql-mark-white,ces-namespace-mark-white,SharedAccessSignature sr=https%3A%2F%2Fces-namespace-mark-white.servicebus.windows.net%2Fces-hub&sig=Tf5bL8oYnFwCG%2FEhi6rU%2FgljHDHeStBCJXDgumA6bbM%3D&se=1756942033&skn=ces-policy,
