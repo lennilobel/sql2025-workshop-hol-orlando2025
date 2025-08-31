@@ -1,9 +1,12 @@
 ﻿using Azure;
+using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.EventHubs;
 using Azure.ResourceManager.EventHubs.Models;
 using Azure.ResourceManager.Resources;
+using Azure.ResourceManager.Sql;
+using Azure.ResourceManager.Sql.Models;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
@@ -305,12 +308,50 @@ namespace SqlHolWorkshopLabManager
 		private static async Task CreateSqlDatabaseServer(AttendeeInfo attendeeInfo, int currentCounter, CancellationToken cancellationToken)
 		{
 			var attendeeName = attendeeInfo.AttendeeName;
-
 			var sqlDatabaseServerName = $"{_sqlDatabaseServerName}-{attendeeName}";
-
-			// GPT: Write the code to create a new Azure SQL Database server for the attendee in the _resourceGroup. Using a similar pattern to the existence check on the event hub resources in the method below, first check if the server name exists, and skip the creation if it does, otherwise, create the database server.
-
 			attendeeInfo.SqlDatabaseServerName = sqlDatabaseServerName;
+
+			var sqlServerCollection = _resourceGroup.GetSqlServers();
+
+			if (await sqlServerCollection.ExistsAsync(sqlDatabaseServerName, expand: null, cancellationToken))
+			{
+				Console.ForegroundColor = ConsoleColor.Yellow;
+				Console.WriteLine($"{currentCounter,3}. Skipping SQL server: {sqlDatabaseServerName} (server already exists)");
+				Console.ForegroundColor = ConsoleColor.Green;
+
+				return;
+			}
+
+			Console.WriteLine($"{currentCounter,3}. Creating SQL server: {sqlDatabaseServerName}");
+
+			var serverData = new SqlServerData(new AzureLocation("Central US"))
+			{
+				AdministratorLogin = "saz",
+				AdministratorLoginPassword = "Big$ecret123",
+				// Optional hardening knobs you can uncomment as needed:
+				// MinimalTlsVersion = SqlServerMinimalTlsVersion.Tls12,
+				// PublicNetworkAccess = ServerNetworkAccessFlag.Enabled,
+			};
+
+			var serverOperation = await sqlServerCollection.CreateOrUpdateAsync(
+				WaitUntil.Completed,
+				sqlDatabaseServerName,
+				serverData,
+				cancellationToken);
+
+			var serverResource = serverOperation.Value;
+
+			var firewallRules = serverResource.GetSqlFirewallRules();
+
+			await firewallRules.CreateOrUpdateAsync(
+				WaitUntil.Completed,
+				firewallRuleName: "WideOpen",
+				new SqlFirewallRuleData
+				{
+					StartIPAddress = "0.0.0.0",
+					EndIPAddress = "255.255.255.255"
+				},
+				cancellationToken);
 		}
 
 		private static async Task CreateEventHubResources(AttendeeInfo attendeeInfo, int currentCounter, CancellationToken cancellationToken)
@@ -318,6 +359,8 @@ namespace SqlHolWorkshopLabManager
 			var attendeeName = attendeeInfo.AttendeeName;
 
 			var eventHubNamespaceName = $"{_eventHubNamespaceName}-{attendeeName}";
+			attendeeInfo.EventHubNamespaceName = eventHubNamespaceName;
+
 			var eventHubNamespaceCollection = _resourceGroup.GetEventHubsNamespaces();
 
 			if (await eventHubNamespaceCollection.ExistsAsync(eventHubNamespaceName, cancellationToken))
@@ -326,6 +369,7 @@ namespace SqlHolWorkshopLabManager
 				Console.WriteLine($"{currentCounter,3}. Skipping event hub namespace: {eventHubNamespaceName} (namespace already exists)");
 				Console.ForegroundColor = ConsoleColor.Green;
 
+				attendeeInfo.EventHubSasToken = await GenerateEventHubSasTokenAsync(eventHubNamespaceName);
 				return;
 			}
 
@@ -373,11 +417,7 @@ namespace SqlHolWorkshopLabManager
 
 			// Generate SAS token
 
-			var eventHubSasToken = await GenerateEventHubSasTokenAsync(eventHubNamespaceName);
-
-			// Capture attendee's event hub namespace name and SAS token
-			attendeeInfo.EventHubNamespaceName = eventHubNamespaceName;
-			attendeeInfo.EventHubSasToken = eventHubSasToken;
+			attendeeInfo.EventHubSasToken = await GenerateEventHubSasTokenAsync(eventHubNamespaceName);
 		}
 
 		private static async Task DeleteResources(string attendee = null)
