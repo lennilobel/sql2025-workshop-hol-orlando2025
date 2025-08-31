@@ -17,7 +17,7 @@ using System.Threading.Tasks;
 
 namespace SqlHolWorkshopLabManager
 {
-	public class Program
+	public class ProgramV1
 	{
 		private const int MaxDop = 6;	// Too large a number can result in diminishing returns, Azure rate limiting, and/or throttling with 429 (too many requests) errors
 

@@ -1,0 +1,2 @@
+AttendeeName,SqlDatabaseServerName,EventHubNamespaceName,EventHubSasToken,StorageAccountConnectionString
+lenni-lobel,sql-lenni-lobel,ces-namespace-lenni-lobel,SharedAccessSignature sr=https%3A%2F%2Fces-namespace-lenni-lobel.servicebus.windows.net%2Fces-hub&sig=rPLVwvB1sdRpmCMAhHfYDos%2FojNuzqX5b2VkIiTTYMI%3D&se=1756939043&skn=ces-policy,
