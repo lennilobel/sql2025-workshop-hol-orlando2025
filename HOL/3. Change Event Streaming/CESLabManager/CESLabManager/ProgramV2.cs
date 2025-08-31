@@ -34,7 +34,7 @@ namespace SqlHolWorkshopLabManager
 		private static SubscriptionData _subscriptionData;
 		private static ResourceGroupResource _resourceGroup;
 
-		static async Task Main()
+		static async Task MainV2()
 		{
 			DisplayHeading();
 

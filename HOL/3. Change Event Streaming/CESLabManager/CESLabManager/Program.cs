@@ -232,17 +232,23 @@ namespace SqlHolWorkshopLabManager
 		{
 			Console.WriteLine();
 			Console.ForegroundColor = ConsoleColor.White;
-			Console.WriteLine($"Attendee resource in resource group '{_resourceGroupName}':");
+			Console.WriteLine($"Attendee resources in resource group '{_resourceGroupName}':");
 			Console.ResetColor();
 
 			var counter = 0;
 
-			await foreach (var eventHubsNamespace in _resourceGroup.GetEventHubsNamespaces().GetAllAsync())
+			await foreach (var sqlServer in _resourceGroup.GetSqlServers().GetAllAsync())
 			{
-				Console.WriteLine($"{++counter,3}. Event hub namespace {eventHubsNamespace.Data.Name}");
+				Console.WriteLine($"{++counter,3}. SQL database server: {sqlServer.Data.Name}");
 			}
 
-			Console.WriteLine($"\nTotal attendee event nub namespaces: {counter}");
+			await foreach (var eventHubsNamespace in _resourceGroup.GetEventHubsNamespaces().GetAllAsync())
+			{
+				Console.WriteLine($"{++counter,3}. Event hub namespace: {eventHubsNamespace.Data.Name}");
+			}
+
+			Console.WriteLine();
+			Console.WriteLine($"Total attendee resources: {counter}");
 		}
 
 		private static async Task CreateResources(string attendeeName = null)
@@ -264,19 +270,18 @@ namespace SqlHolWorkshopLabManager
 			Console.ForegroundColor = ConsoleColor.Green;
 			await Parallel.ForEachAsync(attendeeNames, options, async (attendeeName, cancellationToken) =>
 			{
-				var currentCounter = Interlocked.Increment(ref counter);
-
 				var attendeeInfo = new AttendeeInfo(attendeeName);
 
-				await CreateSqlDatabaseServer(attendeeInfo, currentCounter, cancellationToken);
-				await CreateEventHubResources(attendeeInfo, currentCounter, cancellationToken);
+				counter = Interlocked.Increment(ref counter);
+				await CreateSqlDatabaseServer(attendeeInfo, counter, cancellationToken);
+
+				counter = Interlocked.Increment(ref counter);
+				await CreateEventHubResources(attendeeInfo, counter, cancellationToken);
 
 				lock (outputLock)
 				{
 					outputLines.Add($"{attendeeName},{attendeeInfo.SqlDatabaseServerName},{attendeeInfo.EventHubNamespaceName},{attendeeInfo.EventHubSasToken},{attendeeInfo.StorageAccountConnectionString}");
 				}
-
-				Interlocked.Increment(ref created);
 			});
 			Console.ResetColor();
 			var elapsed = DateTime.Now.Subtract(started);
@@ -305,7 +310,7 @@ namespace SqlHolWorkshopLabManager
 			Console.WriteLine($"Generated {outputPath}");
 		}
 
-		private static async Task CreateSqlDatabaseServer(AttendeeInfo attendeeInfo, int currentCounter, CancellationToken cancellationToken)
+		private static async Task CreateSqlDatabaseServer(AttendeeInfo attendeeInfo, int counter, CancellationToken cancellationToken)
 		{
 			var attendeeName = attendeeInfo.AttendeeName;
 			var sqlDatabaseServerName = $"{_sqlDatabaseServerName}-{attendeeName}";
@@ -316,13 +321,13 @@ namespace SqlHolWorkshopLabManager
 			if (await sqlServerCollection.ExistsAsync(sqlDatabaseServerName, expand: null, cancellationToken))
 			{
 				Console.ForegroundColor = ConsoleColor.Yellow;
-				Console.WriteLine($"{currentCounter,3}. Skipping SQL server: {sqlDatabaseServerName} (server already exists)");
+				Console.WriteLine($"{counter,3}. Skipping SQL server: {sqlDatabaseServerName} (already exists)");
 				Console.ForegroundColor = ConsoleColor.Green;
 
 				return;
 			}
 
-			Console.WriteLine($"{currentCounter,3}. Creating SQL server: {sqlDatabaseServerName}");
+			Console.WriteLine($"{counter,3}. Creating SQL server: {sqlDatabaseServerName}");
 
 			var serverData = new SqlServerData(new AzureLocation("Central US"))
 			{
@@ -354,7 +359,7 @@ namespace SqlHolWorkshopLabManager
 				cancellationToken);
 		}
 
-		private static async Task CreateEventHubResources(AttendeeInfo attendeeInfo, int currentCounter, CancellationToken cancellationToken)
+		private static async Task CreateEventHubResources(AttendeeInfo attendeeInfo, int counter, CancellationToken cancellationToken)
 		{
 			var attendeeName = attendeeInfo.AttendeeName;
 
@@ -366,14 +371,14 @@ namespace SqlHolWorkshopLabManager
 			if (await eventHubNamespaceCollection.ExistsAsync(eventHubNamespaceName, cancellationToken))
 			{
 				Console.ForegroundColor = ConsoleColor.Yellow;
-				Console.WriteLine($"{currentCounter,3}. Skipping event hub namespace: {eventHubNamespaceName} (namespace already exists)");
+				Console.WriteLine($"{counter,3}. Skipping event hub namespace: {eventHubNamespaceName} (already exists)");
 				Console.ForegroundColor = ConsoleColor.Green;
 
 				attendeeInfo.EventHubSasToken = await GenerateEventHubSasTokenAsync(eventHubNamespaceName);
 				return;
 			}
 
-			Console.WriteLine($"{currentCounter,3}. Creating event hub namespace: {eventHubNamespaceName}");
+			Console.WriteLine($"{counter,3}. Creating event hub namespace: {eventHubNamespaceName}");
 
 			// Create event hubs namespace
 
@@ -422,39 +427,102 @@ namespace SqlHolWorkshopLabManager
 
 		private static async Task DeleteResources(string attendee = null)
 		{
-			var namespaceResources = new List<EventHubsNamespaceResource>();
-			await foreach (var namespaceResource in _resourceGroup.GetEventHubsNamespaces().GetAllAsync())
+			// Gather SQL servers to delete
+			var sqlServersToDelete = new List<SqlServerResource>();
+			await foreach (var sqlServer in _resourceGroup.GetSqlServers().GetAllAsync())
 			{
-				var attendeeSuffix = namespaceResource.Data.Name.Replace(_eventHubNamespaceName + "-", string.Empty);
-				if (attendee == null || namespaceResource.Data.Name == $"{_eventHubNamespaceName}-{attendee}")
+				if (attendee == null)
 				{
-					namespaceResources.Add(namespaceResource);
+					// Delete ALL SQL servers in the RG
+					sqlServersToDelete.Add(sqlServer);
+				}
+				else
+				{
+					// Delete ONLY the attendee-specific server
+					var targetName = $"{_sqlDatabaseServerName}-{attendee}";
+					if (sqlServer.Data.Name.Equals(targetName, StringComparison.OrdinalIgnoreCase))
+					{
+						sqlServersToDelete.Add(sqlServer);
+					}
 				}
 			}
 
-			if (!ConfirmYesNo($"Are you sure you want to delete {namespaceResources.Count} attendee resource(s)?"))
+			// Gather Event Hubs namespaces to delete
+			var namespaceResources = new List<EventHubsNamespaceResource>();
+			await foreach (var namespaceResource in _resourceGroup.GetEventHubsNamespaces().GetAllAsync())
+			{
+				if (attendee == null)
+				{
+					// Delete ALL namespaces in the RG
+					namespaceResources.Add(namespaceResource);
+				}
+				else
+				{
+					// Delete ONLY the attendee-specific namespace
+					var targetName = $"{_eventHubNamespaceName}-{attendee}";
+					if (namespaceResource.Data.Name.Equals(targetName, StringComparison.OrdinalIgnoreCase))
+					{
+						namespaceResources.Add(namespaceResource);
+					}
+				}
+			}
+
+			var totalDeletes = sqlServersToDelete.Count + namespaceResources.Count;
+			if (totalDeletes == 0)
+			{
+				Console.WriteLine("\nNothing to delete.");
+				return;
+			}
+
+			if (!ConfirmYesNo(
+					$"Are you sure you want to delete {totalDeletes} resource(s)? " +
+					$"({sqlServersToDelete.Count} SQL server(s), {namespaceResources.Count} event hub namespace(s))"))
 			{
 				return;
 			}
 
 			var counter = 0;
 			var options = new ParallelOptions { MaxDegreeOfParallelism = MaxDop };
-
 			var started = DateTime.Now;
+
 			Console.ForegroundColor = ConsoleColor.Red;
+
+			await Parallel.ForEachAsync(sqlServersToDelete, options, async (sqlServer, cancellationToken) =>
+			{
+				var currentCounter = Interlocked.Increment(ref counter);
+				var serverName = sqlServer.Data.Name;
+
+				try
+				{
+					Console.WriteLine($"{currentCounter,3}. Deleting SQL database server: {serverName}");
+					await sqlServer.DeleteAsync(WaitUntil.Completed, cancellationToken);
+				}
+				catch (Exception ex)
+				{
+					Console.WriteLine($"{currentCounter,3}. Error deleting SQL server {serverName}: {ex.Message}");
+				}
+			});
+
 			await Parallel.ForEachAsync(namespaceResources, options, async (eventHubsNamespace, cancellationToken) =>
 			{
-				var namespaceName = eventHubsNamespace.Data.Name;
 				var currentCounter = Interlocked.Increment(ref counter);
+				var namespaceName = eventHubsNamespace.Data.Name;
 
-				Console.WriteLine($"{currentCounter,3}. Deleting event hub namespace: {namespaceName}");
-
-				await eventHubsNamespace.DeleteAsync(WaitUntil.Completed, cancellationToken);
+				try
+				{
+					Console.WriteLine($"{currentCounter,3}. Deleting event hub namespace: {namespaceName}");
+					await eventHubsNamespace.DeleteAsync(WaitUntil.Completed, cancellationToken);
+				}
+				catch (Exception ex)
+				{
+					Console.WriteLine($"{currentCounter,3}. Error deleting event hub namespace {namespaceName}: {ex.Message}");
+				}
 			});
-			Console.ResetColor();
-			var elapsed = DateTime.Now.Subtract(started);
 
-			Console.WriteLine($"\nTotal namespaces deleted: {counter} (elapsed: {elapsed})");
+			Console.ResetColor();
+
+			var elapsed = DateTime.Now.Subtract(started);
+			Console.WriteLine($"\nDeleted {sqlServersToDelete.Count} SQL server(s) and {namespaceResources.Count} event hub namespace(s) (elapsed: {elapsed})");
 		}
 
 		private static async Task<string> GenerateEventHubSasTokenAsync(string namespaceName)
