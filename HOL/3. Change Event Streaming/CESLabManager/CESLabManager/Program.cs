@@ -6,7 +6,6 @@ using Azure.ResourceManager.EventHubs;
 using Azure.ResourceManager.EventHubs.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Sql;
-using Azure.ResourceManager.Sql.Models;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
@@ -285,6 +284,7 @@ namespace SqlHolWorkshopLabManager
 					{
 						outputLines.Add($"{name},{attendeeInfo.SqlDatabaseServerName},{attendeeInfo.EventHubNamespaceName},{attendeeInfo.EventHubSasToken},{attendeeInfo.StorageAccountConnectionString}");
 					}
+
 					Interlocked.Increment(ref created);
 				}
 				catch (Exception ex)
