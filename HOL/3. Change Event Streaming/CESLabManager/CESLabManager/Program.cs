@@ -114,7 +114,7 @@ namespace SqlHolWorkshopLabManager
 		private static void DisplayHeading()
 		{
 			Console.ForegroundColor = ConsoleColor.Cyan;
-			Console.WriteLine($"SQL Server 2025 Developer Workshop Lab Manager");
+			Console.WriteLine($"Azure SQL Database Workshop for Developers - Lab Resource Manager");
 			Console.ResetColor();
 		}
 
@@ -349,13 +349,13 @@ namespace SqlHolWorkshopLabManager
 			if (await sqlServerCollection.ExistsAsync(sqlDatabaseServerName, expand: null, cancellationToken))
 			{
 				Console.ForegroundColor = ConsoleColor.Yellow;
-				Console.WriteLine($"{counter,3}. Skipping SQL server: {sqlDatabaseServerName} (already exists)");
+				Console.WriteLine($"{counter,3}. Skipping SQL database server: {sqlDatabaseServerName} (already exists)");
 				Console.ForegroundColor = ConsoleColor.Green;
 
 				return;
 			}
 
-			Console.WriteLine($"{counter,3}. Creating SQL server: {sqlDatabaseServerName}");
+			Console.WriteLine($"{counter,3}. Creating SQL database server: {sqlDatabaseServerName}");
 
 			var serverData = new SqlServerData(new AzureLocation(_resourceRegionName))
 			{
@@ -454,13 +454,13 @@ namespace SqlHolWorkshopLabManager
 
 		private static async Task DeleteResources(string attendee = null)
 		{
-			// Gather SQL servers to delete
+			// Gather SQL database servers to delete
 			var sqlServersToDelete = new List<SqlServerResource>();
 			await foreach (var sqlServer in _resourceGroup.GetSqlServers().GetAllAsync())
 			{
 				if (attendee == null)
 				{
-					sqlServersToDelete.Add(sqlServer); // ALL SQL servers
+					sqlServersToDelete.Add(sqlServer); // ALL SQL databaser servers
 				}
 				else
 				{
@@ -499,7 +499,7 @@ namespace SqlHolWorkshopLabManager
 
 			if (!ConfirmYesNo(
 					$"Are you sure you want to delete {totalDeletes} resource(s)? " +
-					$"({sqlServersToDelete.Count} SQL server(s), {namespaceResources.Count} event hub namespace(s))"))
+					$"({sqlServersToDelete.Count} SQL database server(s), {namespaceResources.Count} event hub namespace(s))"))
 			{
 				return;
 			}
@@ -527,7 +527,7 @@ namespace SqlHolWorkshopLabManager
 				}
 				catch (Exception ex)
 				{
-					Console.WriteLine($"{current,3}. Error deleting SQL server {serverName}: {ex.Message}");
+					Console.WriteLine($"{current,3}. Error deleting SQL database server {serverName}: {ex.Message}");
 				}
 			});
 
@@ -553,7 +553,7 @@ namespace SqlHolWorkshopLabManager
 			Console.ResetColor();
 
 			var elapsed = DateTime.Now.Subtract(started);
-			Console.WriteLine($"\nDeleted {sqlDeleted}/{sqlServersToDelete.Count} SQL server(s) and {ehDeleted}/{namespaceResources.Count} event hub namespace(s) (elapsed: {elapsed})");
+			Console.WriteLine($"\nDeleted {sqlDeleted}/{sqlServersToDelete.Count} SQL database server(s) and {ehDeleted}/{namespaceResources.Count} event hub namespace(s) (elapsed: {elapsed})");
 		}
 
 		private static async Task<string> GenerateEventHubSasTokenAsync(string namespaceName)
