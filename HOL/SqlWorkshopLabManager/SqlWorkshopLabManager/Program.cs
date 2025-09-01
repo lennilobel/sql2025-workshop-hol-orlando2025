@@ -753,7 +753,9 @@ namespace SqlHolWorkshopLabManager
 				return;
 			}
 
-			// GPT... read the AttendeeResources.csv file and email each attendee their resources. Use SendGrid. Hardcode a SendGrid API key here for simplicity.
+			// GPT... read the AttendeeResources.csv file into an array of AttendeeInfo objects.
+			// Then, for each attendee in the attendees array, find the matching AttendeeInfo object
+			// Then, if the EmailAddress is not empty, send an email to the attendee with their resource information.
 		}
 
 		private static bool ConfirmYesNo(string message)
