@@ -872,8 +872,8 @@ namespace SqlHolWorkshopLabManager
 <!DOCTYPE html>
 <html>
   <body style=""font-family:Arial"">
-    <p>Hi {attendee.AttendeeName},</p>
-    <p>Welcome to <strong>{_workshopName}</strong>! Here are your lab resources.</p>
+    <p>Welcome to <b>{_workshopName}</b>!</p>
+    <p>Here are your personalized lab resources.</p>
     <h3 style=""margin-bottom:6px"">SQL Database</h3>
     <table cellpadding=""4"">
       <tr><td><b>Server</b></td><td>{attendee.SqlDatabaseServerName}.database.windows.net</td></tr>
