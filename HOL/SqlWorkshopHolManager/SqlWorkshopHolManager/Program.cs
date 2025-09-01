@@ -7,6 +7,8 @@ using Azure.ResourceManager.EventHubs.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Sql;
 using Azure.ResourceManager.Sql.Models;
+using Azure.ResourceManager.Storage;
+using Azure.ResourceManager.Storage.Models;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
@@ -35,10 +37,13 @@ namespace SqlHolWorkshopLabManager
 		private static int _eventHubSasTokenExpirationDays;
 		private static string _storageAccountName;
 		private static string _storageContainerName;
+		private static string _adventureWorksResourceGroupName;
+		private static string _adventureWorksBacpacUri;
 
 		private static string[] _attendeeNames;
 		private static SubscriptionData _subscriptionData;
 		private static ResourceGroupResource _resourceGroup;
+		private static ResourceGroupResource _adventureWorksResourceGroup;
 
 		static async Task Main()
 		{
@@ -120,6 +125,9 @@ namespace SqlHolWorkshopLabManager
 
 		private static async Task<bool> InitializeApplication()
 		{
+			Console.WriteLine();
+			Console.WriteLine("Initializing...");
+
 			var currentDir = AppContext.BaseDirectory + "\\..\\..\\..";
 			var attendeeNamesFilePath = Path.Combine(currentDir, "AttendeeNames.txt");
 
@@ -136,26 +144,20 @@ namespace SqlHolWorkshopLabManager
 				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
 				.Build();
 
-			// Resource group/region
 			_resourceGroupName = config["ResourceGroupName"];
 			_resourceRegionName = config["ResourceRegionName"];
-
-			// SQL Database
 			_sqlDatabaseServerName = config["SqlDatabase:ServerName"];
 			_sqlDatabaseUsername = config["SqlDatabase:Username"];
 			_sqlDatabasePassword = config["SqlDatabase:Password"];
-
-			// Event hub
 			_eventHubNamespaceName = config["EventHub:NamespaceName"];
 			_eventHubName = config["EventHub:EventHubName"];
 			_eventHubPolicyName = config["EventHub:PolicyName"];
 			_eventHubSasTokenExpirationDays = int.Parse(config["EventHub:SasTokenExpirationDays"]);
-
-			// Storage
 			_storageAccountName = config["Storage:AccountName"];
 			_storageContainerName = config["Storage:ContainerName"];
+			_adventureWorksResourceGroupName = config["AdventureWorks:ResourceGroupName"];
+			_adventureWorksBacpacUri = config["AdventureWorks:BacpacUri"];
 
-			// Attendees
 			_attendeeNames = File.ReadAllLines(attendeeNamesFilePath) 
 				.Select(line => line.Trim())
 				.Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith("#"))
@@ -170,6 +172,7 @@ namespace SqlHolWorkshopLabManager
 				_subscriptionData = subscription.Data;
 
 				_resourceGroup = await subscription.GetResourceGroups().GetAsync(_resourceGroupName);
+				_adventureWorksResourceGroup = await subscription.GetResourceGroups().GetAsync(_adventureWorksResourceGroupName);
 			}
 			catch (Exception ex)
 			{
@@ -218,6 +221,12 @@ namespace SqlHolWorkshopLabManager
 			Console.WriteLine($"  Account Name          {_storageAccountName}");
 			Console.WriteLine($"  Container Name        {_storageContainerName}");
 			Console.WriteLine();
+			Console.ForegroundColor = ConsoleColor.White;
+			Console.WriteLine($"AdventureWorks");
+			Console.ResetColor();
+			Console.WriteLine($"  Resource Group Name   {_adventureWorksResourceGroupName}");
+			Console.WriteLine($"  Bacpac URI            {_adventureWorksBacpacUri}");
+			Console.WriteLine();
 		}
 
 		private static void ShowAttendeeList()
@@ -258,7 +267,10 @@ namespace SqlHolWorkshopLabManager
 				Console.WriteLine($"{++counter,3}. Event hub namespace: {eventHubsNamespace.Data.Name}");
 			}
 
-			// GPT... also list storage accounts
+			await foreach (var storage in _resourceGroup.GetStorageAccounts().GetAllAsync())
+			{
+				Console.WriteLine($"{++counter,3}. Storage account: {storage.Data.Name}");
+			}
 
 			Console.ResetColor();
 
@@ -291,11 +303,11 @@ namespace SqlHolWorkshopLabManager
 
 				try
 				{
-					var sqlDatabaseTask = CreateSqlDatabaseServer(attendeeInfo, Interlocked.Increment(ref counter), cancellationToken);
+					var sqlDatabaseTask = CreateSqlDatabaseResources(attendeeInfo, Interlocked.Increment(ref counter), cancellationToken);
 					var eventHubTask = CreateEventHubResources(attendeeInfo, Interlocked.Increment(ref counter), cancellationToken);
-					var storageTask = CreateStorageResources(attendeeInfo, Interlocked.Increment(ref counter), cancellationToken);
+					var storageAccountTask = CreateStorageAccountResources(attendeeInfo, Interlocked.Increment(ref counter), cancellationToken);
 
-					await Task.WhenAll(sqlDatabaseTask, eventHubTask);
+					await Task.WhenAll(sqlDatabaseTask, eventHubTask, storageAccountTask);
 
 					lock (outputLock)
 					{
@@ -341,24 +353,26 @@ namespace SqlHolWorkshopLabManager
 			Console.WriteLine($"Generated {outputPath}");
 		}
 
-		private static async Task CreateSqlDatabaseServer(AttendeeInfo attendeeInfo, int counter, CancellationToken cancellationToken)
+		#region "Create SQL database resources"
+
+		private static async Task CreateSqlDatabaseResources(AttendeeInfo attendeeInfo, int counter, CancellationToken cancellationToken)
 		{
 			var attendeeName = attendeeInfo.AttendeeName;
-			var sqlDatabaseServerName = $"{_sqlDatabaseServerName}-{attendeeName}";
-			attendeeInfo.SqlDatabaseServerName = sqlDatabaseServerName;
+			var serverName = $"{_sqlDatabaseServerName}-{attendeeName}";
+			attendeeInfo.SqlDatabaseServerName = serverName;
 
 			var sqlServerCollection = _resourceGroup.GetSqlServers();
 
-			if (await sqlServerCollection.ExistsAsync(sqlDatabaseServerName, expand: null, cancellationToken))
+			if (await sqlServerCollection.ExistsAsync(serverName, expand: null, cancellationToken))
 			{
 				Console.ForegroundColor = ConsoleColor.Yellow;
-				Console.WriteLine($"{counter,3}. Skipping SQL database server: {sqlDatabaseServerName} (already exists)");
+				Console.WriteLine($"{counter,3}. Skipping SQL database server: {serverName} (already exists)");
 				Console.ForegroundColor = ConsoleColor.Green;
 
 				return;
 			}
 
-			Console.WriteLine($"{counter,3}. Creating SQL database server: {sqlDatabaseServerName}");
+			Console.WriteLine($"{counter,3}. Creating SQL database server: {serverName}");
 
 			var serverData = new SqlServerData(new AzureLocation(_resourceRegionName))
 			{
@@ -370,7 +384,7 @@ namespace SqlHolWorkshopLabManager
 
 			var serverOperation = await sqlServerCollection.CreateOrUpdateAsync(
 				WaitUntil.Completed,
-				sqlDatabaseServerName,
+				serverName,
 				serverData,
 				cancellationToken);
 
@@ -387,7 +401,47 @@ namespace SqlHolWorkshopLabManager
 					EndIPAddress = "255.255.255.255"
 				},
 				cancellationToken);
+
+			await ImportAdventureWorks2022(attendeeInfo, counter, serverResource, cancellationToken);
 		}
+
+		private static async Task ImportAdventureWorks2022(AttendeeInfo attendeeInfo, int counter, SqlServerResource serverResource, CancellationToken cancellationToken)
+		{
+			var databaseName = "AdventureWorks2022";
+
+			Console.WriteLine($"    {counter,3}. Creating SQL database {databaseName} on server {attendeeInfo.SqlDatabaseServerName}");
+
+			var databases = serverResource.GetSqlDatabases();
+
+			var dbData = new SqlDatabaseData(new AzureLocation(_resourceRegionName))
+			{
+				Sku = new SqlSku("GP_S_Gen5_2")
+			};
+
+			var createOperation = await databases.CreateOrUpdateAsync(
+				WaitUntil.Completed,
+				databaseName,
+				dbData,
+				cancellationToken);
+
+			var database = createOperation.Value;
+
+			var storageAccount = (await _adventureWorksResourceGroup.GetStorageAccounts().GetAsync("lennidemo", expand: null, cancellationToken)).Value;
+
+			var storageAccountKey = await GetStorageAccountKey(storageAccount, cancellationToken);
+
+			var bacpacUri = new Uri(_adventureWorksBacpacUri);
+
+			Console.WriteLine($"    {counter,3}. Importing AdventureWorks2022.bacpac to server {attendeeInfo.SqlDatabaseServerName} from {bacpacUri}");
+
+			var import = new ImportExistingDatabaseDefinition(StorageKeyType.StorageAccessKey, storageAccountKey, bacpacUri, _sqlDatabaseUsername, _sqlDatabasePassword);
+
+			await database.ImportAsync(WaitUntil.Started, import, cancellationToken);	// let the import operation execute asynchronously
+		}
+
+		#endregion
+
+		#region "Create event hub resources"
 
 		private static async Task CreateEventHubResources(AttendeeInfo attendeeInfo, int counter, CancellationToken cancellationToken)
 		{
@@ -455,123 +509,6 @@ namespace SqlHolWorkshopLabManager
 			attendeeInfo.EventHubSasToken = await GenerateEventHubSasTokenAsync(eventHubNamespaceName);
 		}
 
-		private static async Task CreateStorageResources(AttendeeInfo attendeeInfo, int counter, CancellationToken cancellationToken)
-		{
-			var attendeeName = attendeeInfo.AttendeeName;
-
-			var storageAccountName = $"{_storageAccountName}{attendeeName.Replace("-", string.Empty)}";
-
-			// GPT... if storage account exists, skip and return
-
-			// Otherwise, create storage account and blob container, and stash the connection string in attendeeInfo.StorageAccountConnectionString
-		}
-
-		private static async Task DeleteResources(string attendee = null)
-		{
-			// GPT... also delete storage accounts
-
-			// Gather SQL database servers to delete
-			var sqlServersToDelete = new List<SqlServerResource>();
-			await foreach (var sqlServer in _resourceGroup.GetSqlServers().GetAllAsync())
-			{
-				if (attendee == null)
-				{
-					sqlServersToDelete.Add(sqlServer); // ALL SQL databaser servers
-				}
-				else
-				{
-					var targetName = $"{_sqlDatabaseServerName}-{attendee}";
-					if (sqlServer.Data.Name.Equals(targetName, StringComparison.OrdinalIgnoreCase))
-					{
-						sqlServersToDelete.Add(sqlServer);
-					}
-				}
-			}
-
-			// Gather Event Hubs namespaces to delete
-			var namespaceResources = new List<EventHubsNamespaceResource>();
-			await foreach (var namespaceResource in _resourceGroup.GetEventHubsNamespaces().GetAllAsync())
-			{
-				if (attendee == null)
-				{
-					namespaceResources.Add(namespaceResource); // ALL namespaces
-				}
-				else
-				{
-					var targetName = $"{_eventHubNamespaceName}-{attendee}";
-					if (namespaceResource.Data.Name.Equals(targetName, StringComparison.OrdinalIgnoreCase))
-					{
-						namespaceResources.Add(namespaceResource);
-					}
-				}
-			}
-
-			var totalDeletes = sqlServersToDelete.Count + namespaceResources.Count;
-			if (totalDeletes == 0)
-			{
-				Console.WriteLine("\nNothing to delete.");
-				return;
-			}
-
-			if (!ConfirmYesNo(
-					$"Are you sure you want to delete {totalDeletes} resource(s)? " +
-					$"({sqlServersToDelete.Count} SQL database server(s), {namespaceResources.Count} event hub namespace(s))"))
-			{
-				return;
-			}
-
-			var opCounter = 0;
-			var sqlDeleted = 0;
-			var ehDeleted = 0;
-
-			var options = new ParallelOptions { MaxDegreeOfParallelism = MaxDop };
-			var started = DateTime.Now;
-
-			Console.ForegroundColor = ConsoleColor.Red;
-
-			// Kick off BOTH deletion sweeps concurrently
-			var sqlTask = Parallel.ForEachAsync(sqlServersToDelete, options, async (sqlServer, cancellationToken) =>
-			{
-				var current = Interlocked.Increment(ref opCounter);
-				var serverName = sqlServer.Data.Name;
-
-				try
-				{
-					Console.WriteLine($"{current,3}. Deleting SQL database server: {serverName}");
-					await sqlServer.DeleteAsync(WaitUntil.Completed, cancellationToken);
-					Interlocked.Increment(ref sqlDeleted);
-				}
-				catch (Exception ex)
-				{
-					Console.WriteLine($"{current,3}. Error deleting SQL database server {serverName}: {ex.Message}");
-				}
-			});
-
-			var ehTask = Parallel.ForEachAsync(namespaceResources, options, async (ns, cancellationToken) =>
-			{
-				var current = Interlocked.Increment(ref opCounter);
-				var namespaceName = ns.Data.Name;
-
-				try
-				{
-					Console.WriteLine($"{current,3}. Deleting event hub namespace: {namespaceName}");
-					await ns.DeleteAsync(WaitUntil.Completed, cancellationToken);
-					Interlocked.Increment(ref ehDeleted);
-				}
-				catch (Exception ex)
-				{
-					Console.WriteLine($"{current,3}. Error deleting event hub namespace {namespaceName}: {ex.Message}");
-				}
-			});
-
-			await Task.WhenAll(sqlTask, ehTask);
-
-			Console.ResetColor();
-
-			var elapsed = DateTime.Now.Subtract(started);
-			Console.WriteLine($"\nDeleted {sqlDeleted}/{sqlServersToDelete.Count} SQL database server(s) and {ehDeleted}/{namespaceResources.Count} event hub namespace(s) (elapsed: {elapsed})");
-		}
-
 		private static async Task<string> GenerateEventHubSasTokenAsync(string namespaceName)
 		{
 			// Build the full URI to the Event Hub within the namespace
@@ -600,6 +537,231 @@ namespace SqlHolWorkshopLabManager
 			return $"SharedAccessSignature sr={encodedUri}&sig={encodedSig}&se={expiry}&skn={_eventHubPolicyName}";
 		}
 
+		#endregion
+
+		#region "Create storage resources"
+
+		private static async Task CreateStorageAccountResources(AttendeeInfo attendeeInfo, int counter, CancellationToken cancellationToken)
+		{
+			var attendeeName = attendeeInfo.AttendeeName;
+			var storageAccountName = BuildStorageAccountName(attendeeName);
+			var storageAccounts = _resourceGroup.GetStorageAccounts();
+			var storageAccount = default(StorageAccountResource);
+
+			if (await storageAccounts.ExistsAsync(storageAccountName, expand: null, cancellationToken))
+			{
+				Console.ForegroundColor = ConsoleColor.Yellow;
+				Console.WriteLine($"{counter,3}. Skipping storage account: {storageAccountName} (already exists)");
+				Console.ForegroundColor = ConsoleColor.Green;
+
+				storageAccount = (await storageAccounts.GetAsync(storageAccountName, expand: null, cancellationToken)).Value;
+			}
+			else
+			{
+				Console.WriteLine($"{counter,3}. Creating storage account: {storageAccountName}");
+
+				var storageData = new StorageAccountCreateOrUpdateContent(
+					new StorageSku(StorageSkuName.StandardLrs),
+					StorageKind.StorageV2,
+					new AzureLocation(_resourceRegionName))
+				{
+					EnableHttpsTrafficOnly = true,
+					MinimumTlsVersion = StorageMinimumTlsVersion.Tls1_2,
+					AllowBlobPublicAccess = false,
+					AccessTier = StorageAccountAccessTier.Hot,
+				};
+
+				var createOperation = await storageAccounts.CreateOrUpdateAsync(
+					WaitUntil.Completed,
+					storageAccountName,
+					storageData,
+					cancellationToken);
+
+				storageAccount = createOperation.Value;
+
+				var blobService = (await storageAccount.GetBlobService().GetAsync(cancellationToken)).Value;
+				var containers = blobService.GetBlobContainers();
+
+				await containers.CreateOrUpdateAsync(
+					WaitUntil.Completed,
+					_storageContainerName,
+					new BlobContainerData { PublicAccess = StoragePublicAccessType.None },
+					cancellationToken);
+			}
+
+			var accountKey = await GetStorageAccountKey(storageAccount, cancellationToken);
+
+			attendeeInfo.StorageAccountConnectionString =
+				$"DefaultEndpointsProtocol=https;AccountName={storageAccountName};AccountKey={accountKey};EndpointSuffix=core.windows.net";
+		}
+
+		private static string BuildStorageAccountName(string attendeeName)
+		{
+			var rawStorageAccountName = $"{_storageAccountName}-{attendeeName}";
+			var safeStorageAccountName = new string(rawStorageAccountName.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+			var storageAccountName = safeStorageAccountName.Length > 24 ? safeStorageAccountName.Substring(0, 24) : safeStorageAccountName;
+
+			return storageAccountName;
+		}
+
+		private static async Task<string> GetStorageAccountKey(StorageAccountResource storageAccount, CancellationToken cancellationToken)
+		{
+			var storageAccountKey = default(string);
+			await foreach (var key in storageAccount.GetKeysAsync(expand: null, cancellationToken))
+			{
+				if (string.Equals(key.KeyName, "key1", StringComparison.OrdinalIgnoreCase))
+				{
+					storageAccountKey = key.Value;
+					break;
+				}
+			}
+
+			return storageAccountKey;
+		}
+
+		#endregion
+
+		#region "Delete resources"
+
+		private static async Task DeleteResources(string attendeeName = null)
+		{
+			var sqlDatabaseServersToDelete = new List<SqlServerResource>();
+			await foreach (var sqlDatabaseServer in _resourceGroup.GetSqlServers().GetAllAsync())
+			{
+				if (attendeeName == null)
+				{
+					sqlDatabaseServersToDelete.Add(sqlDatabaseServer);
+				}
+				else
+				{
+					var targetName = $"{_sqlDatabaseServerName}-{attendeeName}";
+					if (sqlDatabaseServer.Data.Name.Equals(targetName, StringComparison.OrdinalIgnoreCase))
+					{
+						sqlDatabaseServersToDelete.Add(sqlDatabaseServer);
+					}
+				}
+			}
+
+			var eventHubNamespacesToDelete = new List<EventHubsNamespaceResource>();
+			await foreach (var eventHubNamespace in _resourceGroup.GetEventHubsNamespaces().GetAllAsync())
+			{
+				if (attendeeName == null)
+				{
+					eventHubNamespacesToDelete.Add(eventHubNamespace);
+				}
+				else
+				{
+					var targetName = $"{_eventHubNamespaceName}-{attendeeName}";
+					if (eventHubNamespace.Data.Name.Equals(targetName, StringComparison.OrdinalIgnoreCase))
+					{
+						eventHubNamespacesToDelete.Add(eventHubNamespace);
+					}
+				}
+			}
+
+			var storageAccountsToDelete = new List<StorageAccountResource>();
+			await foreach (var storageAccount in _resourceGroup.GetStorageAccounts().GetAllAsync())
+			{
+				if (attendeeName == null)
+				{
+					storageAccountsToDelete.Add(storageAccount);
+				}
+				else
+				{
+					var targetName = BuildStorageAccountName(attendeeName);
+					if (storageAccount.Data.Name.Equals(targetName, StringComparison.OrdinalIgnoreCase))
+					{
+						storageAccountsToDelete.Add(storageAccount);
+					}
+				}
+			}
+
+			var totalDeletes = sqlDatabaseServersToDelete.Count + eventHubNamespacesToDelete.Count + storageAccountsToDelete.Count;
+			if (totalDeletes == 0)
+			{
+				Console.WriteLine("\nNothing to delete.");
+				return;
+			}
+
+			if (!ConfirmYesNo(
+				$"Are you sure you want to delete {sqlDatabaseServersToDelete.Count} SQL database server(s), {eventHubNamespacesToDelete.Count} event hub namespace(s), {storageAccountsToDelete.Count} storage account(s) - total of {totalDeletes} resource(s)"))
+			{
+				return;
+			}
+
+			var operationCounter = 0;
+			var sqlDatabaseServersDeletedCount = 0;
+			var eventHubNamespacesDeletedCount = 0;
+			var storageAccountsDeletedCount = 0;
+
+			var options = new ParallelOptions { MaxDegreeOfParallelism = MaxDop };
+			var started = DateTime.Now;
+
+			Console.ForegroundColor = ConsoleColor.Red;
+
+			var sqlDatabaseTask = Parallel.ForEachAsync(sqlDatabaseServersToDelete, options, async (sql, ct) =>
+			{
+				var current = Interlocked.Increment(ref operationCounter);
+				var name = sql.Data.Name;
+
+				try
+				{
+					Console.WriteLine($"{current,3}. Deleting SQL database server: {name}");
+					await sql.DeleteAsync(WaitUntil.Completed, ct);
+					Interlocked.Increment(ref sqlDatabaseServersDeletedCount);
+				}
+				catch (Exception ex)
+				{
+					Console.WriteLine($"{current,3}. Error deleting SQL database server {name}: {ex.Message}");
+				}
+			});
+
+			var eventHubTask = Parallel.ForEachAsync(eventHubNamespacesToDelete, options, async (ns, ct) =>
+			{
+				var current = Interlocked.Increment(ref operationCounter);
+				var name = ns.Data.Name;
+
+				try
+				{
+					Console.WriteLine($"{current,3}. Deleting event hub namespace: {name}");
+					await ns.DeleteAsync(WaitUntil.Completed, ct);
+					Interlocked.Increment(ref eventHubNamespacesDeletedCount);
+				}
+				catch (Exception ex)
+				{
+					Console.WriteLine($"{current,3}. Error deleting event hub namespace {name}: {ex.Message}");
+				}
+			});
+
+			var storageAccountTask = Parallel.ForEachAsync(storageAccountsToDelete, options, async (sa, ct) =>
+			{
+				var current = Interlocked.Increment(ref operationCounter);
+				var name = sa.Data.Name;
+
+				try
+				{
+					Console.WriteLine($"{current,3}. Deleting storage account: {name}");
+					await sa.DeleteAsync(WaitUntil.Completed, ct);
+					Interlocked.Increment(ref storageAccountsDeletedCount);
+				}
+				catch (Exception ex)
+				{
+					Console.WriteLine($"{current,3}. Error deleting storage account {name}: {ex.Message}");
+				}
+			});
+
+			await Task.WhenAll(sqlDatabaseTask, eventHubTask, storageAccountTask);
+
+			Console.ResetColor();
+
+			var elapsed = DateTime.Now.Subtract(started);
+			Console.WriteLine($"\nDeleted " +
+				$"{sqlDatabaseServersDeletedCount}/{sqlDatabaseServersToDelete.Count} SQL database server(s), " +
+				$"{eventHubNamespacesDeletedCount}/{eventHubNamespacesToDelete.Count} event hub namespace(s), " +
+				$"{storageAccountsDeletedCount}/{storageAccountsToDelete.Count} storage account(s) " +
+				$"(elapsed: {elapsed})");
+		}
+
 		private static bool ConfirmYesNo(string message)
 		{
 			Console.ForegroundColor = ConsoleColor.White;
@@ -607,6 +769,8 @@ namespace SqlHolWorkshopLabManager
 			Console.ResetColor();
 			return Console.ReadLine().Trim().ToUpper() == "Y";
 		}
+
+		#endregion
 
 	}
 
