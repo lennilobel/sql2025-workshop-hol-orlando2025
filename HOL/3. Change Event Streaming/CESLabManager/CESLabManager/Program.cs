@@ -258,6 +258,8 @@ namespace SqlHolWorkshopLabManager
 				Console.WriteLine($"{++counter,3}. Event hub namespace: {eventHubsNamespace.Data.Name}");
 			}
 
+			// GPT... also list storage accounts
+
 			Console.ResetColor();
 
 			Console.WriteLine();
@@ -291,6 +293,7 @@ namespace SqlHolWorkshopLabManager
 				{
 					var sqlDatabaseTask = CreateSqlDatabaseServer(attendeeInfo, Interlocked.Increment(ref counter), cancellationToken);
 					var eventHubTask = CreateEventHubResources(attendeeInfo, Interlocked.Increment(ref counter), cancellationToken);
+					var storageTask = CreateStorageResources(attendeeInfo, Interlocked.Increment(ref counter), cancellationToken);
 
 					await Task.WhenAll(sqlDatabaseTask, eventHubTask);
 
@@ -452,8 +455,21 @@ namespace SqlHolWorkshopLabManager
 			attendeeInfo.EventHubSasToken = await GenerateEventHubSasTokenAsync(eventHubNamespaceName);
 		}
 
+		private static async Task CreateStorageResources(AttendeeInfo attendeeInfo, int counter, CancellationToken cancellationToken)
+		{
+			var attendeeName = attendeeInfo.AttendeeName;
+
+			var storageAccountName = $"{_storageAccountName}{attendeeName.Replace("-", string.Empty)}";
+
+			// GPT... if storage account exists, skip and return
+
+			// Otherwise, create storage account and blob container, and stash the connection string in attendeeInfo.StorageAccountConnectionString
+		}
+
 		private static async Task DeleteResources(string attendee = null)
 		{
+			// GPT... also delete storage accounts
+
 			// Gather SQL database servers to delete
 			var sqlServersToDelete = new List<SqlServerResource>();
 			await foreach (var sqlServer in _resourceGroup.GetSqlServers().GetAllAsync())
