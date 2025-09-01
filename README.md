@@ -4,16 +4,20 @@
 
 Welcome!
 
-Before diving into the hands-on labs, ensure you have the necessary software installed. Follow the steps below to prepare your environment.
+Get ready to dive into the exciting new features of SQL Server 2025, including AI integration and enhanced developer capabilities. This hands-on lab will guide you through practical exercises to help you understand and leverage these new functionalities.
 
-1. **SQL Server Management Studio (SSMS) 21**
+## Prerequisites
 
-   To interact with SQL Server / Azure SQL Database, including running queries and managing databases, install the latest version of SSMS.
+Before starting, ensure you have the necessary software installed. Specifically, you'll need **SQL Server Management Studio (SSMS)** and **Visual Studio 2022 (any edition)** to work through the labs.
+
+1. **SQL Server Management Studio 21**
+
+   To interact with SQL Server 2025 / Azure SQL Database, including running queries and managing databases, install the latest version of SSMS.
 
     - Download SSMS from:  
 [https://aka.ms/ssms/21/release/vs_SSMS.exe](https://aka.ms/ssms/21/release/vs_SSMS.exe)
 
-3. **Visual Studio 2022 (any edition)**
+3. **Visual Studio 2022**
 
    Visual Studio 2022 is required for the Change Event Streaming labs.
  
@@ -27,9 +31,9 @@ Before diving into the hands-on labs, ensure you have the necessary software ins
     - During installation, select the **.NET Desktop Development** workload.
 
 
-## You're all set.
+## You're all set
 
-All other required resources have been provisioned for you in Azure by your instructor. Details for accessing these resources have been emailed to each registered attendee in advance of the workshop.
+All other required resources have been provisioned for you in Azure by your instructor. This includes an Azure SQL Database instance (functionally equivalent to SQL Server 2025). Details for accessing these resources have been emailed to each registered attendee in advance of the workshop.
 
 Ready to dive in?
 
