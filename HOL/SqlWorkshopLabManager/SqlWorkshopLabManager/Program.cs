@@ -15,6 +15,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Mail;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -24,8 +25,9 @@ namespace SqlHolWorkshopLabManager
 {
 	public class Program
 	{
-		private const int MaxDop = 10;	// Too large a number can result in diminishing returns, Azure rate limiting, and/or throttling with 429 (too many requests) errors
+		private const int MaxDop = 10;  // Too large a number can result in diminishing returns, Azure rate limiting, and/or throttling with 429 (too many requests) errors
 
+		private static string _workshopName;
 		private static string _resourceGroupName;
 		private static string _resourceRegionName;
 		private static string _sqlDatabaseServerName;
@@ -39,6 +41,11 @@ namespace SqlHolWorkshopLabManager
 		private static string _storageContainerName;
 		private static string _adventureWorksResourceGroupName;
 		private static string _adventureWorksBacpacUri;
+		private static string _emailSmtpHost;
+		private static int _emailSmtpPort;
+		private static string _emailSmtpUsername;
+		private static string _emailSmtpPassword;
+		private static string _emailFromDisplayName;
 
 		private static AttendeeInfo[] _attendees;
 		private static SubscriptionData _subscriptionData;
@@ -150,6 +157,7 @@ namespace SqlHolWorkshopLabManager
 				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
 				.Build();
 
+			_workshopName = config["WorkshopName"];
 			_resourceGroupName = config["ResourceGroupName"];
 			_resourceRegionName = config["ResourceRegionName"];
 			_sqlDatabaseServerName = config["SqlDatabase:ServerName"];
@@ -163,11 +171,16 @@ namespace SqlHolWorkshopLabManager
 			_storageContainerName = config["Storage:ContainerName"];
 			_adventureWorksResourceGroupName = config["AdventureWorks:ResourceGroupName"];
 			_adventureWorksBacpacUri = config["AdventureWorks:BacpacUri"];
+			_emailSmtpHost = config["Email:SmtpHost"];
+			_emailSmtpPort = int.Parse(config["Email:SmtpPort"]);
+			_emailSmtpUsername = config["Email:SmtpUsername"];
+			_emailSmtpPassword = config["Email:SmtpPassword"];
+			_emailFromDisplayName = config["Email:FromDisplayName"];
 
-			_attendees = File.ReadAllLines(attendeesFilePath) 
+			_attendees = File.ReadAllLines(attendeesFilePath)
 				.Select(line => line.Trim())
 				.Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith("#"))
-				.Select(line => 
+				.Select(line =>
 				{
 					var parts = line.Split(',', 2);
 					var name = parts[0].Trim();
@@ -430,7 +443,7 @@ namespace SqlHolWorkshopLabManager
 
 			var importDefinition = new ImportExistingDatabaseDefinition(StorageKeyType.StorageAccessKey, storageAccountKey, bacpacUri, _sqlDatabaseUsername, _sqlDatabasePassword);
 
-			await database.ImportAsync(WaitUntil.Started, importDefinition, cancellationToken);	// let the import operation execute asynchronously
+			await database.ImportAsync(WaitUntil.Started, importDefinition, cancellationToken); // let the import operation execute asynchronously
 		}
 
 		private static async Task CreateEventHubResources(AttendeeInfo attendeeInfo, int counter, CancellationToken cancellationToken)
@@ -748,16 +761,157 @@ namespace SqlHolWorkshopLabManager
 		{
 			var attendees = attendeeName == null ? _attendees : [new AttendeeInfo(attendeeName)];
 
-			if (!ConfirmYesNo($"Are you sure you want to create resources for {attendees.Length} attendee(s)?"))
+			if (!ConfirmYesNo($"Are you sure you want to email {attendees.Length} attendee(s)?"))
+				return;
+
+			// Load resources CSV created by CreateResources()
+			var currentDir = AppContext.BaseDirectory + "\\..\\..\\..";
+			var csvPath = Path.Combine(currentDir, "AttendeeResources.csv");
+			if (!File.Exists(csvPath))
 			{
+				Console.ForegroundColor = ConsoleColor.Red;
+				Console.WriteLine($"Could not find AttendeeResources.csv at '{csvPath}'. Create resources first.");
+				Console.ResetColor();
 				return;
 			}
 
-			// GPT... read the AttendeeResources.csv file into an array of AttendeeInfo objects.
-			// Then, for each attendee in the attendees array, find the matching AttendeeInfo object
-			// Then, if the EmailAddress is not empty, send an email to the attendee with their resource information.
-			// I want to use SMTP with my Outlook / Microsoft 365 email address lenni.lobel@sleektech.com.
-			// For now, hardcode SMTP configuration, I will refactor later
+			var resourcesByName = LoadAttendeeResourcesFromCsv(csvPath);
+
+			var sent = 0;
+			var skipped = 0;
+			var notFound = 0;
+
+			using var smtp = new SmtpClient(_emailSmtpHost, _emailSmtpPort)
+			{
+				EnableSsl = true, // STARTTLS on 587
+				DeliveryMethod = SmtpDeliveryMethod.Network,
+				Credentials = new NetworkCredential(_emailSmtpUsername, _emailSmtpPassword),
+				Timeout = 1000 * 30
+			};
+
+			Console.WriteLine();
+			Console.ForegroundColor = ConsoleColor.Green;
+
+			foreach (var a in attendees.OrderBy(x => x.AttendeeName))
+			{
+				if (!resourcesByName.TryGetValue(a.AttendeeName, out var res))
+				{
+					Console.ForegroundColor = ConsoleColor.Yellow;
+					Console.WriteLine($"Skipping '{a.AttendeeName}': no matching row in AttendeeResources.csv");
+					Console.ForegroundColor = ConsoleColor.Green;
+					notFound++;
+					continue;
+				}
+
+				var email = string.IsNullOrWhiteSpace(res.EmailAddress) ? a.EmailAddress : res.EmailAddress;
+				if (string.IsNullOrWhiteSpace(email))
+				{
+					Console.ForegroundColor = ConsoleColor.Yellow;
+					Console.WriteLine($"Skipping '{a.AttendeeName}': no email address.");
+					Console.ForegroundColor = ConsoleColor.Green;
+					skipped++;
+					continue;
+				}
+
+				using var msg = new MailMessage
+				{
+					From = new MailAddress(_emailSmtpUsername, _emailFromDisplayName),
+					Subject = "Your SQL Workshop Lab Resources",
+					Body = BuildHtmlEmailBody(res),
+					IsBodyHtml = true
+				};
+				msg.To.Add(new MailAddress(email, a.AttendeeName));
+
+				try
+				{
+					await smtp.SendMailAsync(msg);
+					Console.ForegroundColor = ConsoleColor.Green;
+					Console.WriteLine($"Sent: {a.AttendeeName} <{email}>");
+					Console.ResetColor();
+					sent++;
+				}
+				catch (Exception ex)
+				{
+					Console.ForegroundColor = ConsoleColor.Red;
+					Console.WriteLine($"Error sending to {a.AttendeeName} <{email}>: {ex.Message}");
+					Console.ResetColor();
+				}
+			}
+
+			Console.ResetColor();
+			Console.WriteLine($"\nEmails sent: {sent}, skipped (no email): {skipped}, not found in CSV: {notFound}");
+		}
+
+		private static Dictionary<string, AttendeeInfo> LoadAttendeeResourcesFromCsv(string path)
+		{
+			// Header expected:
+			// AttendeeName,EmailAddress,SqlDatabaseServerName,EventHubNamespaceName,EventHubSasToken,StorageAccountConnectionString
+			var dict = new Dictionary<string, AttendeeInfo>(StringComparer.OrdinalIgnoreCase);
+			var lines = File.ReadAllLines(path);
+			if (lines.Length <= 1) return dict;
+
+			foreach (var line in lines.Skip(1))
+			{
+				if (string.IsNullOrWhiteSpace(line))
+				{
+					continue;
+				}
+
+				var parts = line.Split(',', 6);
+
+				if (parts.Length < 6)
+				{
+					continue;
+				}
+
+				var info = new AttendeeInfo(parts[0].Trim(), parts[1].Trim())
+				{
+					SqlDatabaseServerName = parts[2].Trim(),
+					EventHubNamespaceName = parts[3].Trim(),
+					EventHubSasToken = parts[4].Trim(),
+					StorageAccountConnectionString = parts[5].Trim()
+				};
+				dict[info.AttendeeName] = info;
+			}
+			return dict;
+		}
+
+		private static string BuildHtmlEmailBody(AttendeeInfo attendee)
+		{
+			var sb = new StringBuilder();
+			sb.Append($@"
+<!DOCTYPE html>
+<html>
+  <body style=""font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.4"">
+    <p>Hi {attendee.AttendeeName},</p>
+
+    <p>Welcome to the <strong>{_workshopName}</strong>! Here are your lab resources.</p>
+
+    <h3 style=""margin-bottom:6px"">SQL Database</h3>
+    <div style=""padding:10px;border:1px solid #ddd;border-radius:6px;margin:0 0 12px 0"">
+      <div><strong>Server:</strong> {attendee.SqlDatabaseServerName}.database.windows.net</div>
+      <div><strong>Authentication:</strong>SQL</div>
+      <div><strong>Username:</strong>{_sqlDatabaseUsername}</div>
+      <div><strong>Password:</strong>{_sqlDatabasePassword}</div>
+    </div>
+
+    <h3 style=""margin-bottom:6px"">Event Hubs</h3>
+    <div style=""padding:10px;border:1px solid #ddd;border-radius:6px;margin:0 0 12px 0"">
+      <div><strong>Namespace:</strong> {attendee.EventHubNamespaceName}</div>
+      <div><strong>Event Hub:</strong> {_eventHubName}</div>
+      <div><strong>Policy:</strong> {_eventHubPolicyName}</div>
+      <div><strong>SAS Token:</strong> {attendee.EventHubSasToken}</div>
+    </div>
+
+    <h3 style=""margin-bottom:6px"">Storage</h3>
+    <div style=""padding:10px;border:1px solid #ddd;border-radius:6px;margin:0 0 12px 0"">
+      <div><strong>Connection string:</strong> {attendee.StorageAccountConnectionString}</div>
+      <div><strong>Container:</strong> {_storageContainerName}</div>
+    </div>
+
+  </body>
+</html>");
+			return sb.ToString();
 		}
 
 		private static bool ConfirmYesNo(string message)
