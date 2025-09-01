@@ -69,6 +69,7 @@ namespace SqlHolWorkshopLabManager
 				Console.WriteLine($"  L = List all attendee resources");
 				Console.WriteLine($"  C = Create attendee resources");
 				Console.WriteLine($"  D = Delete attendee resources");
+				Console.WriteLine($"  E = Email attendees");
 				Console.WriteLine($"  Q = Quit");
 				Console.WriteLine();
 				Console.Write("Enter choice: ");
@@ -98,6 +99,10 @@ namespace SqlHolWorkshopLabManager
 
 					case "D":
 						await DeleteResources(string.IsNullOrWhiteSpace(attendee) ? null : attendee);
+						break;
+
+					case "E":
+						await EmailAttendees(string.IsNullOrWhiteSpace(attendee) ? null : attendee);
 						break;
 
 					case "Q":
@@ -737,6 +742,18 @@ namespace SqlHolWorkshopLabManager
 				$"{eventHubNamespacesDeletedCount}/{eventHubNamespacesToDelete.Count} event hub namespace(s), " +
 				$"{storageAccountsDeletedCount}/{storageAccountsToDelete.Count} storage account(s) " +
 				$"(elapsed: {elapsed})");
+		}
+
+		private static async Task EmailAttendees(string attendeeName)
+		{
+			var attendees = attendeeName == null ? _attendees : [new AttendeeInfo(attendeeName)];
+
+			if (!ConfirmYesNo($"Are you sure you want to create resources for {attendees.Length} attendee(s)?"))
+			{
+				return;
+			}
+
+			// GPT... read the AttendeeResources.csv file and email each attendee their resources. Use SendGrid. Hardcode a SendGrid API key here for simplicity.
 		}
 
 		private static bool ConfirmYesNo(string message)
