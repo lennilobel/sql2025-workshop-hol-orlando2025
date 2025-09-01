@@ -352,8 +352,7 @@ namespace SqlHolWorkshopLabManager
 			Console.ResetColor();
 			Console.WriteLine();
 
-			var currentDir = AppContext.BaseDirectory + "\\..\\..\\..";
-			var outputPath = Path.Combine(currentDir, "AttendeeResources.csv");
+			var outputPath = Path.GetFullPath("AttendeeResources.csv");
 			File.WriteAllLines(outputPath, sortedLines);
 
 			Console.WriteLine($"\nProcessed {attendees.Length} attendee(s); successfully created resources for {created} attendee(s) in {elapsed}");
