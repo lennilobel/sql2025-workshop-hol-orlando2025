@@ -756,6 +756,8 @@ namespace SqlHolWorkshopLabManager
 			// GPT... read the AttendeeResources.csv file into an array of AttendeeInfo objects.
 			// Then, for each attendee in the attendees array, find the matching AttendeeInfo object
 			// Then, if the EmailAddress is not empty, send an email to the attendee with their resource information.
+			// I want to use SMTP with my Outlook / Microsoft 365 email address lenni.lobel@sleektech.com.
+			// For now, hardcode SMTP configuration, I will refactor later
 		}
 
 		private static bool ConfirmYesNo(string message)
