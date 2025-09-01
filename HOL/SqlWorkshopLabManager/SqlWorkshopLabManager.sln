@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36408.4 d17.14
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SqlWorkshopHolManager", "SqlWorkshopHolManager\SqlWorkshopHolManager.csproj", "{A236BB78-8A55-3CE1-C39E-C0E5AD58BA48}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SqlWorkshopLabManager", "SqlWorkshopLabManager\SqlWorkshopLabManager.csproj", "{A236BB78-8A55-3CE1-C39E-C0E5AD58BA48}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
