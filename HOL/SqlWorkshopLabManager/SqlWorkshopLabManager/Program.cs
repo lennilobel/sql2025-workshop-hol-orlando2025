@@ -297,7 +297,7 @@ namespace SqlHolWorkshopLabManager
 			}
 
 			var created = 0;
-			var outputLines = new List<string> { "AttendeeName,SqlDatabaseServerName,EventHubNamespaceName,EventHubSasToken,StorageAccountConnectionString" };
+			var outputLines = new List<string> { "AttendeeName,EmailAddress,SqlDatabaseServerName,EventHubNamespaceName,EventHubSasToken,StorageAccountConnectionString" };
 			var outputLock = new object();
 			var options = new ParallelOptions { MaxDegreeOfParallelism = MaxDop };
 
@@ -318,7 +318,7 @@ namespace SqlHolWorkshopLabManager
 
 					lock (outputLock)
 					{
-						outputLines.Add($"{attendee.AttendeeName},{attendee.SqlDatabaseServerName},{attendee.EventHubNamespaceName},{attendee.EventHubSasToken},{attendee.StorageAccountConnectionString}");
+						outputLines.Add($"{attendee.AttendeeName},{attendee.EmailAddress},{attendee.SqlDatabaseServerName},{attendee.EventHubNamespaceName},{attendee.EventHubSasToken},{attendee.StorageAccountConnectionString}");
 					}
 
 					Interlocked.Increment(ref created);
@@ -352,7 +352,8 @@ namespace SqlHolWorkshopLabManager
 			Console.ResetColor();
 			Console.WriteLine();
 
-			var outputPath = Path.GetFullPath("AttendeeResources.csv");
+			var currentDir = AppContext.BaseDirectory + "\\..\\..\\..";
+			var outputPath = Path.Combine(currentDir, "AttendeeResources.csv");
 			File.WriteAllLines(outputPath, sortedLines);
 
 			Console.WriteLine($"\nProcessed {attendees.Length} attendee(s); successfully created resources for {created} attendee(s) in {elapsed}");
