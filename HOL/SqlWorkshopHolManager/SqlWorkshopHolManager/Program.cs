@@ -24,7 +24,7 @@ namespace SqlHolWorkshopLabManager
 {
 	public class Program
 	{
-		private const int MaxDop = 6;	// Too large a number can result in diminishing returns, Azure rate limiting, and/or throttling with 429 (too many requests) errors
+		private const int MaxDop = 10;	// Too large a number can result in diminishing returns, Azure rate limiting, and/or throttling with 429 (too many requests) errors
 
 		private static string _resourceGroupName;
 		private static string _resourceRegionName;
@@ -40,7 +40,7 @@ namespace SqlHolWorkshopLabManager
 		private static string _adventureWorksResourceGroupName;
 		private static string _adventureWorksBacpacUri;
 
-		private static string[] _attendeeNames;
+		private static AttendeeInfo[] _attendees;
 		private static SubscriptionData _subscriptionData;
 		private static ResourceGroupResource _resourceGroup;
 		private static ResourceGroupResource _adventureWorksResourceGroup;
@@ -129,13 +129,14 @@ namespace SqlHolWorkshopLabManager
 			Console.WriteLine("Initializing...");
 
 			var currentDir = AppContext.BaseDirectory + "\\..\\..\\..";
-			var attendeeNamesFilePath = Path.Combine(currentDir, "AttendeeNames.txt");
+			var attendeesFilePath = Path.Combine(currentDir, "Attendees.csv");
 
-			if (!File.Exists(attendeeNamesFilePath))
+			if (!File.Exists(attendeesFilePath))
 			{
 				Console.ForegroundColor = ConsoleColor.Red;
-				Console.WriteLine($"ERROR: Attendee list file not found at '{attendeeNamesFilePath}'");
+				Console.WriteLine($"Attendee list file not found at '{attendeesFilePath}'");
 				Console.ResetColor();
+
 				return false;
 			}
 
@@ -158,9 +159,16 @@ namespace SqlHolWorkshopLabManager
 			_adventureWorksResourceGroupName = config["AdventureWorks:ResourceGroupName"];
 			_adventureWorksBacpacUri = config["AdventureWorks:BacpacUri"];
 
-			_attendeeNames = File.ReadAllLines(attendeeNamesFilePath) 
+			_attendees = File.ReadAllLines(attendeesFilePath) 
 				.Select(line => line.Trim())
 				.Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith("#"))
+				.Select(line => 
+				{
+					var parts = line.Split(',', 2);
+					var name = parts[0].Trim();
+					var email = parts.Length > 1 ? parts[1].Trim() : string.Empty;
+					return new AttendeeInfo(name, email);
+				})
 				.ToArray();
 
 			var credential = new AzureCliCredential();      // requires that you first run `az login` in a terminal
@@ -177,9 +185,10 @@ namespace SqlHolWorkshopLabManager
 			catch (Exception ex)
 			{
 				Console.ForegroundColor = ConsoleColor.Red;
-				Console.WriteLine("ERROR: Could not retrieve Azure resource information.");
+				Console.WriteLine("Could not retrieve Azure resource information.");
 				Console.WriteLine(ex.Message);
 				Console.ResetColor();
+
 				return false;
 			}
 
@@ -236,14 +245,14 @@ namespace SqlHolWorkshopLabManager
 			Console.WriteLine();
 
 			Console.ForegroundColor = ConsoleColor.Green;
-			foreach (var attendee in _attendeeNames)
+			foreach (var attendee in _attendees)
 			{
 				Console.WriteLine(attendee);
 			}
 			Console.ResetColor();
 
 			Console.WriteLine();
-			Console.WriteLine($"Total Attendees: {_attendeeNames.Length}");
+			Console.WriteLine($"Total Attendees: {_attendees.Length}");
 		}
 
 		private static async Task ListResources()
@@ -280,9 +289,9 @@ namespace SqlHolWorkshopLabManager
 
 		private static async Task CreateResources(string attendeeName = null)
 		{
-			var attendeeNames = attendeeName == null ? _attendeeNames : [attendeeName];
+			var attendees = attendeeName == null ? _attendees : [new AttendeeInfo(attendeeName)];
 
-			if (!ConfirmYesNo($"Are you sure you want to create resources for {attendeeNames.Length} attendee(s)?"))
+			if (!ConfirmYesNo($"Are you sure you want to create resources for {attendees.Length} attendee(s)?"))
 			{
 				return;
 			}
@@ -297,21 +306,19 @@ namespace SqlHolWorkshopLabManager
 
 			Console.ForegroundColor = ConsoleColor.Green;
 
-			await Parallel.ForEachAsync(attendeeNames, options, async (name, cancellationToken) =>
+			await Parallel.ForEachAsync(attendees, options, async (attendee, cancellationToken) =>
 			{
-				var attendeeInfo = new AttendeeInfo(name);
-
 				try
 				{
-					var sqlDatabaseTask = CreateSqlDatabaseResources(attendeeInfo, Interlocked.Increment(ref counter), cancellationToken);
-					var eventHubTask = CreateEventHubResources(attendeeInfo, Interlocked.Increment(ref counter), cancellationToken);
-					var storageAccountTask = CreateStorageAccountResources(attendeeInfo, Interlocked.Increment(ref counter), cancellationToken);
+					var sqlDatabaseTask = CreateSqlDatabaseResources(attendee, Interlocked.Increment(ref counter), cancellationToken);
+					var eventHubTask = CreateEventHubResources(attendee, Interlocked.Increment(ref counter), cancellationToken);
+					var storageAccountTask = CreateStorageAccountResources(attendee, Interlocked.Increment(ref counter), cancellationToken);
 
 					await Task.WhenAll(sqlDatabaseTask, eventHubTask, storageAccountTask);
 
 					lock (outputLock)
 					{
-						outputLines.Add($"{name},{attendeeInfo.SqlDatabaseServerName},{attendeeInfo.EventHubNamespaceName},{attendeeInfo.EventHubSasToken},{attendeeInfo.StorageAccountConnectionString}");
+						outputLines.Add($"{attendee.AttendeeName},{attendee.SqlDatabaseServerName},{attendee.EventHubNamespaceName},{attendee.EventHubSasToken},{attendee.StorageAccountConnectionString}");
 					}
 
 					Interlocked.Increment(ref created);
@@ -320,7 +327,7 @@ namespace SqlHolWorkshopLabManager
 				{
 					var current = Interlocked.Increment(ref counter);
 					Console.ForegroundColor = ConsoleColor.Red;
-					Console.WriteLine($"{current,3}. Error creating resources for attendee '{name}': {ex.Message}");
+					Console.WriteLine($"{current,3}. Error creating resources for attendee '{attendee.AttendeeName}': {ex.Message}");
 					Console.ResetColor();
 				}
 			});
@@ -349,17 +356,14 @@ namespace SqlHolWorkshopLabManager
 			var outputPath = Path.Combine(currentDir, "AttendeeResources.csv");
 			File.WriteAllLines(outputPath, sortedLines);
 
-			Console.WriteLine($"\nProcessed {attendeeNames.Length} attendee(s); successfully created resources for {created} attendee(s) in {elapsed}");
+			Console.WriteLine($"\nProcessed {attendees.Length} attendee(s); successfully created resources for {created} attendee(s) in {elapsed}");
 			Console.WriteLine($"Generated {outputPath}");
 		}
 
-		#region "Create SQL database resources"
-
-		private static async Task CreateSqlDatabaseResources(AttendeeInfo attendeeInfo, int counter, CancellationToken cancellationToken)
+		private static async Task CreateSqlDatabaseResources(AttendeeInfo attendee, int counter, CancellationToken cancellationToken)
 		{
-			var attendeeName = attendeeInfo.AttendeeName;
-			var serverName = $"{_sqlDatabaseServerName}-{attendeeName}";
-			attendeeInfo.SqlDatabaseServerName = serverName;
+			var serverName = $"{_sqlDatabaseServerName}-{attendee.AttendeeName}";
+			attendee.SqlDatabaseServerName = serverName;
 
 			var sqlServerCollection = _resourceGroup.GetSqlServers();
 
@@ -402,46 +406,27 @@ namespace SqlHolWorkshopLabManager
 				},
 				cancellationToken);
 
-			await ImportAdventureWorks2022(attendeeInfo, counter, serverResource, cancellationToken);
+			await ImportAdventureWorks2022(attendee, counter, serverResource, cancellationToken);
 		}
 
 		private static async Task ImportAdventureWorks2022(AttendeeInfo attendeeInfo, int counter, SqlServerResource serverResource, CancellationToken cancellationToken)
 		{
-			var databaseName = "AdventureWorks2022";
-
-			Console.WriteLine($"    {counter,3}. Creating SQL database {databaseName} on server {attendeeInfo.SqlDatabaseServerName}");
+			Console.WriteLine($"    {counter,3}. Creating SQL database AdventureWorks2022 on server {attendeeInfo.SqlDatabaseServerName}");
 
 			var databases = serverResource.GetSqlDatabases();
-
-			var dbData = new SqlDatabaseData(new AzureLocation(_resourceRegionName))
-			{
-				Sku = new SqlSku("GP_S_Gen5_2")
-			};
-
-			var createOperation = await databases.CreateOrUpdateAsync(
-				WaitUntil.Completed,
-				databaseName,
-				dbData,
-				cancellationToken);
-
+			var databaseData = new SqlDatabaseData(new AzureLocation(_resourceRegionName)) { Sku = new SqlSku("GP_S_Gen5_2") };
+			var createOperation = await databases.CreateOrUpdateAsync(WaitUntil.Completed, "AdventureWorks2022", databaseData, cancellationToken);
 			var database = createOperation.Value;
-
 			var storageAccount = (await _adventureWorksResourceGroup.GetStorageAccounts().GetAsync("lennidemo", expand: null, cancellationToken)).Value;
-
 			var storageAccountKey = await GetStorageAccountKey(storageAccount, cancellationToken);
-
 			var bacpacUri = new Uri(_adventureWorksBacpacUri);
 
 			Console.WriteLine($"    {counter,3}. Importing AdventureWorks2022.bacpac to server {attendeeInfo.SqlDatabaseServerName} from {bacpacUri}");
 
-			var import = new ImportExistingDatabaseDefinition(StorageKeyType.StorageAccessKey, storageAccountKey, bacpacUri, _sqlDatabaseUsername, _sqlDatabasePassword);
+			var importDefinition = new ImportExistingDatabaseDefinition(StorageKeyType.StorageAccessKey, storageAccountKey, bacpacUri, _sqlDatabaseUsername, _sqlDatabasePassword);
 
-			await database.ImportAsync(WaitUntil.Started, import, cancellationToken);	// let the import operation execute asynchronously
+			await database.ImportAsync(WaitUntil.Started, importDefinition, cancellationToken);	// let the import operation execute asynchronously
 		}
-
-		#endregion
-
-		#region "Create event hub resources"
 
 		private static async Task CreateEventHubResources(AttendeeInfo attendeeInfo, int counter, CancellationToken cancellationToken)
 		{
@@ -537,10 +522,6 @@ namespace SqlHolWorkshopLabManager
 			return $"SharedAccessSignature sr={encodedUri}&sig={encodedSig}&se={expiry}&skn={_eventHubPolicyName}";
 		}
 
-		#endregion
-
-		#region "Create storage resources"
-
 		private static async Task CreateStorageAccountResources(AttendeeInfo attendeeInfo, int counter, CancellationToken cancellationToken)
 		{
 			var attendeeName = attendeeInfo.AttendeeName;
@@ -618,10 +599,6 @@ namespace SqlHolWorkshopLabManager
 
 			return storageAccountKey;
 		}
-
-		#endregion
-
-		#region "Delete resources"
 
 		private static async Task DeleteResources(string attendeeName = null)
 		{
@@ -769,8 +746,6 @@ namespace SqlHolWorkshopLabManager
 			Console.ResetColor();
 			return Console.ReadLine().Trim().ToUpper() == "Y";
 		}
-
-		#endregion
 
 	}
 
