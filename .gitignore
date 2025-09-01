@@ -399,3 +399,4 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+/HOL/SqlWorkshopHolManager/SqlWorkshopHolManager/AttendeeResources.csv
