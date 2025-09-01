@@ -759,31 +759,20 @@ namespace SqlHolWorkshopLabManager
 
 		private static async Task EmailAttendees(string attendeeName)
 		{
-			var attendees = attendeeName == null ? _attendees : [new AttendeeInfo(attendeeName)];
+			var sourceAttendees = attendeeName == null ? _attendees : [new AttendeeInfo(attendeeName)];
 
-			if (!ConfirmYesNo($"Are you sure you want to email {attendees.Length} attendee(s)?"))
-				return;
-
-			// Load resources CSV created by CreateResources()
-			var currentDir = AppContext.BaseDirectory + "\\..\\..\\..";
-			var csvPath = Path.Combine(currentDir, "AttendeeResources.csv");
-			if (!File.Exists(csvPath))
+			if (!ConfirmYesNo($"Are you sure you want to email {sourceAttendees.Length} attendee(s)?"))
 			{
-				Console.ForegroundColor = ConsoleColor.Red;
-				Console.WriteLine($"Could not find AttendeeResources.csv at '{csvPath}'. Create resources first.");
-				Console.ResetColor();
 				return;
 			}
 
-			var resourcesByName = LoadAttendeeResourcesFromCsv(csvPath);
-
+			var attendees = LoadAttendeeResources();
 			var sent = 0;
 			var skipped = 0;
-			var notFound = 0;
 
 			using var smtp = new SmtpClient(_emailSmtpHost, _emailSmtpPort)
 			{
-				EnableSsl = true, // STARTTLS on 587
+				EnableSsl = true,
 				DeliveryMethod = SmtpDeliveryMethod.Network,
 				Credentials = new NetworkCredential(_emailSmtpUsername, _emailSmtpPassword),
 				Timeout = 1000 * 30
@@ -792,22 +781,15 @@ namespace SqlHolWorkshopLabManager
 			Console.WriteLine();
 			Console.ForegroundColor = ConsoleColor.Green;
 
-			foreach (var a in attendees.OrderBy(x => x.AttendeeName))
+			foreach (var sourceAttendee in sourceAttendees.OrderBy(a => a.AttendeeName))
 			{
-				if (!resourcesByName.TryGetValue(a.AttendeeName, out var res))
-				{
-					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"Skipping '{a.AttendeeName}': no matching row in AttendeeResources.csv");
-					Console.ForegroundColor = ConsoleColor.Green;
-					notFound++;
-					continue;
-				}
+				var attendee = attendees.GetValueOrDefault(sourceAttendee.AttendeeName);
 
-				var email = string.IsNullOrWhiteSpace(res.EmailAddress) ? a.EmailAddress : res.EmailAddress;
+				var email = string.IsNullOrWhiteSpace(attendee.EmailAddress) ? sourceAttendee.EmailAddress : attendee.EmailAddress;
 				if (string.IsNullOrWhiteSpace(email))
 				{
 					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"Skipping '{a.AttendeeName}': no email address.");
+					Console.WriteLine($"Skipping '{sourceAttendee.AttendeeName}': no email address.");
 					Console.ForegroundColor = ConsoleColor.Green;
 					skipped++;
 					continue;
@@ -817,38 +799,44 @@ namespace SqlHolWorkshopLabManager
 				{
 					From = new MailAddress(_emailSmtpUsername, _emailFromDisplayName),
 					Subject = "Your SQL Workshop Lab Resources",
-					Body = BuildHtmlEmailBody(res),
+					Body = BuildHtmlEmailBody(attendee),
 					IsBodyHtml = true
 				};
-				msg.To.Add(new MailAddress(email, a.AttendeeName));
+				msg.To.Add(new MailAddress(email, sourceAttendee.AttendeeName));
 
 				try
 				{
 					await smtp.SendMailAsync(msg);
 					Console.ForegroundColor = ConsoleColor.Green;
-					Console.WriteLine($"Sent: {a.AttendeeName} <{email}>");
+					Console.WriteLine($"Sent: {sourceAttendee.AttendeeName} <{email}>");
 					Console.ResetColor();
 					sent++;
 				}
 				catch (Exception ex)
 				{
 					Console.ForegroundColor = ConsoleColor.Red;
-					Console.WriteLine($"Error sending to {a.AttendeeName} <{email}>: {ex.Message}");
+					Console.WriteLine($"Error sending to {sourceAttendee.AttendeeName} <{email}>: {ex.Message}");
 					Console.ResetColor();
 				}
 			}
 
 			Console.ResetColor();
-			Console.WriteLine($"\nEmails sent: {sent}, skipped (no email): {skipped}, not found in CSV: {notFound}");
+			Console.WriteLine($"\nEmails sent: {sent}, skipped (no email address): {skipped}");
 		}
 
-		private static Dictionary<string, AttendeeInfo> LoadAttendeeResourcesFromCsv(string path)
+		private static Dictionary<string, AttendeeInfo> LoadAttendeeResources()
 		{
+			var currentDir = AppContext.BaseDirectory + "\\..\\..\\..";
+			var path = Path.Combine(currentDir, "AttendeeResources.csv");
+
 			// Header expected:
 			// AttendeeName,EmailAddress,SqlDatabaseServerName,EventHubNamespaceName,EventHubSasToken,StorageAccountConnectionString
 			var dict = new Dictionary<string, AttendeeInfo>(StringComparer.OrdinalIgnoreCase);
 			var lines = File.ReadAllLines(path);
-			if (lines.Length <= 1) return dict;
+			if (lines.Length <= 1)
+			{
+				return dict;
+			}
 
 			foreach (var line in lines.Skip(1))
 			{
@@ -871,6 +859,7 @@ namespace SqlHolWorkshopLabManager
 					EventHubSasToken = parts[4].Trim(),
 					StorageAccountConnectionString = parts[5].Trim()
 				};
+
 				dict[info.AttendeeName] = info;
 			}
 			return dict;
@@ -882,33 +871,28 @@ namespace SqlHolWorkshopLabManager
 			sb.Append($@"
 <!DOCTYPE html>
 <html>
-  <body style=""font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.4"">
+  <body style=""font-family:Arial"">
     <p>Hi {attendee.AttendeeName},</p>
-
-    <p>Welcome to the <strong>{_workshopName}</strong>! Here are your lab resources.</p>
-
+    <p>Welcome to <strong>{_workshopName}</strong>! Here are your lab resources.</p>
     <h3 style=""margin-bottom:6px"">SQL Database</h3>
-    <div style=""padding:10px;border:1px solid #ddd;border-radius:6px;margin:0 0 12px 0"">
-      <div><strong>Server:</strong> {attendee.SqlDatabaseServerName}.database.windows.net</div>
-      <div><strong>Authentication:</strong>SQL</div>
-      <div><strong>Username:</strong>{_sqlDatabaseUsername}</div>
-      <div><strong>Password:</strong>{_sqlDatabasePassword}</div>
-    </div>
-
+    <table cellpadding=""4"">
+      <tr><td><b>Server</b></td><td>{attendee.SqlDatabaseServerName}.database.windows.net</td></tr>
+      <tr><td><b>Authentication</b></td><td>SQL</td></tr>
+      <tr><td><b>Username</b></td><td>{_sqlDatabaseUsername}</td></tr>
+      <tr><td><b>Password</b></td><td>{_sqlDatabasePassword}</td></tr>
+    </table>
     <h3 style=""margin-bottom:6px"">Event Hubs</h3>
-    <div style=""padding:10px;border:1px solid #ddd;border-radius:6px;margin:0 0 12px 0"">
-      <div><strong>Namespace:</strong> {attendee.EventHubNamespaceName}</div>
-      <div><strong>Event Hub:</strong> {_eventHubName}</div>
-      <div><strong>Policy:</strong> {_eventHubPolicyName}</div>
-      <div><strong>SAS Token:</strong> {attendee.EventHubSasToken}</div>
-    </div>
-
+    <table cellpadding=""4"">
+      <tr><td><b>Namespace</b></td><td>{attendee.EventHubNamespaceName}.database.windows.net</td></tr>
+      <tr><td><b>Event Hub</b></td><td>{_eventHubName}</td></tr>
+      <tr><td><b>Policy</b></td><td>{_eventHubPolicyName}</td></tr>
+      <tr><td><b>SAS Token</b></td><td>{attendee.EventHubSasToken}</td></tr>
+    </table>
     <h3 style=""margin-bottom:6px"">Storage</h3>
-    <div style=""padding:10px;border:1px solid #ddd;border-radius:6px;margin:0 0 12px 0"">
-      <div><strong>Connection string:</strong> {attendee.StorageAccountConnectionString}</div>
-      <div><strong>Container:</strong> {_storageContainerName}</div>
-    </div>
-
+    <table cellpadding=""4"">
+      <tr><td><b>Connection String</b></td><td>{attendee.StorageAccountConnectionString}.database.windows.net</td></tr>
+      <tr><td><b>Container Name</b></td><td>{_storageContainerName}</td></tr>
+    </table>
   </body>
 </html>");
 			return sb.ToString();
