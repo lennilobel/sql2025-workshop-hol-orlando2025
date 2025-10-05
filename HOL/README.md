@@ -19,7 +19,7 @@ To get started, launch SQL Server Management Studio (SSMS) and connect to the Az
 
 You will also need to suffix the server name with `.database.windows.net` to form the full server address (for example, `sql-john-doe.database.windows.net`). Note that the server name, username, and password are all case-sensitive.
 
-Once connected, expand the **Databases** node in Object Explorer. You should see the **AdventureWorks2022** database, which is provided for use with many of the labs in this workshop.
+Once connected, expand the **Databases** node in Object Explorer. You should see the **AdventureWorks2022** database, which is provided for use with the labs in this workshop.
 
 ___
 

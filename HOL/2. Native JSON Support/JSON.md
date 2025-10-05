@@ -12,108 +12,55 @@ This hands-on lab walks you through the new JSON features introduced in SQL Serv
 * The new `WITH ARRAY WRAPPER` clause in `JSON_QUERY`
 * The new ANSI SQL `RETURNING` clause in `JSON_VALUE`
 
-> **Prerequisites:** Ensure that you are running SQL Server 2025 and have the `AdventureWorks2022` sample database installed.
+In SSMS, right-click on the **AdventureWorks2022** database in Object Explorer and select **New Query** to open a new query window for this lab.
 
----
+## Native JSON data type
 
-## Set Up the Sample Environment
+Previously, JSON was stored as `nvarchar`, which treated the JSON payload as an unstructured string. This meant that updates required overwriting the entire value and offered no storage or performance optimizations.
 
-While some examples will query real data in `AdventureWorks2022`, most of our exploration will use a simple demo table with native JSON columns. This allows us to focus on the JSON capabilities in isolation.
-
-Create the `Sales.JsonDemo` table with a native JSON column:
-
-```sql
-USE AdventureWorks2022
-GO
-
-DROP TABLE IF EXISTS Sales.JsonDemo
-GO
-
-CREATE TABLE Sales.JsonDemo
-(
-    JsonDemoId int IDENTITY PRIMARY KEY,
-    OrderNumber nvarchar(20),
-    OrderDetails json
-)
-```
-
-This table uses the new `json` data type for the `OrderDetails` column. Unlike `nvarchar(max)`, the `json` type enforces that all stored values are valid JSON. This improves performance, enables rich in-place modifications, and allows JSON-specific indexing and path enforcement.
-
-Now insert some sample documents:
-
-```sql
-INSERT INTO Sales.JsonDemo (OrderNumber, OrderDetails)
-VALUES
-('SO-1001', N'
-{
-  "customer": "Contoso",
-  "lines": [
-    { "productId": 712, "quantity": 2 },
-    { "productId": 937, "quantity": 1 }
-  ],
-  "shipped": false
-}'),
-('SO-1002', N'
-{
-  "customer": "Fabrikam",
-  "lines": [
-    { "productId": 870, "quantity": 3 }
-  ],
-  "shipped": true
-}')
-```
-
-We now have a table where each row contains an order with nested line items and a boolean flag. Let's explore how SQL Server 2025 lets us interact with these documents natively and efficiently.
-
----
-
-## Native `json` Data Type and `.modify()` Method
-
-Previously, JSON was stored as `nvarchar`, which treated the JSON payload as an unstructured string. This meant updates required overwriting the entire value and offered no storage or performance optimizations. SQL Server 2025 introduces a true `json` type that supports partial document updates via the `.modify()` method.
-
-Another major advantage of the `json` data type is its **internal compact binary format**, which is more space-efficient than storing JSON text in `nvarchar(max)`. SQL Server parses and stores the document in a binary representation optimized for traversal and indexing, reducing memory usage and I/O.
+SQL Server 2025 introduces a true `json` data type with an **internal compact binary format**, which is significantly more space-efficient than storing JSON text in `nvarchar(max)`. SQL Server parses and stores the document in a binary representation optimized for traversal and indexing, reducing memory usage and I/O.
 
 You can observe this difference with `DATALENGTH`, which returns the number of bytes used to store a value. The following example compares storage sizes for the same JSON content stored as `varchar(max)`, `nvarchar(max)`, and native `json`:
 
 ```sql
 DECLARE @JsonData_nvarchar nvarchar(max) = N'
 [
-	{
-		"OrderId": 5,
-		"CustomerId": 6,
-		"OrderDate": "2024-10-10T14:22:27.25-05:00",
-		"OrderAmount": 25.9
-	},
-	{
-		"OrderId": 6,
-		"CustomerId": 76,
-		"OrderDate": "2024-12-10T11:02:36.12-08:00",
-		"OrderAmount": 350.25
-	},
-	{
-		"OrderId": 7,
-		"CustomerId": 9,
-		"OrderDate": "2024-10-10T14:22:27.25-05:00",
-		"OrderAmount": 862.75
-	},
-	{
-		"OrderId": 8,
-		"CustomerId": 7,
-		"OrderDate": "2024-12-10T11:02:36.12-08:00",
-		"OrderAmount": 591.95
-	},
-	{
-		"OrderId": 9,
-		"CustomerId": 15,
-		"OrderDate": "2024-10-10T14:22:27.25-05:00",
-		"OrderAmount": 8510.00
-	},
-	{
-		"OrderId": 10,
-		"CustomerId": 2,
-		"OrderDate": "2024-12-10T11:02:36.12-08:00",
-		"OrderAmount": 871.10
-	}
+  {
+    "OrderId": 5,
+    "CustomerId": 6,
+    "OrderDate": "2024-10-10T14:22:27.25-05:00",
+    "OrderAmount": 25.9
+  },
+  {
+    "OrderId": 6,
+    "CustomerId": 76,
+    "OrderDate": "2024-12-10T11:02:36.12-08:00",
+    "OrderAmount": 350.25
+  },
+  {
+    "OrderId": 7,
+    "CustomerId": 9,
+    "OrderDate": "2024-10-10T14:22:27.25-05:00",
+    "OrderAmount": 862.75
+  },
+  {
+    "OrderId": 8,
+    "CustomerId": 7,
+    "OrderDate": "2024-12-10T11:02:36.12-08:00",
+    "OrderAmount": 591.95
+  },
+  {
+    "OrderId": 9,
+    "CustomerId": 15,
+    "OrderDate": "2024-10-10T14:22:27.25-05:00",
+    "OrderAmount": 8510.00
+  },
+  {
+    "OrderId": 10,
+    "CustomerId": 2,
+    "OrderDate": "2024-12-10T11:02:36.12-08:00",
+    "OrderAmount": 871.10
+  }
 ]'
 
 DECLARE @JsonData_varchar  varchar(max)   = CAST(@JsonData_nvarchar AS varchar(max))
@@ -127,23 +74,58 @@ SELECT
 
 The results typically show:
 
-* `varchar(max)` size: 721 bytes
-* `nvarchar(max)` size: 1442 bytes (due to 2 bytes per Unicode character)
+* `varchar(max)` size: 781 bytes
+* `nvarchar(max)` size: 1562 bytes (due to 2 bytes per Unicode character)
 * `json` size: 529 bytes (thanks to its compact binary storage format)
 
-> This highlights a dramatic advantage of the `json` type: **even while preserving full Unicode fidelity like `nvarchar(max)`, it consumes significantly less space**—in this example, a reduction from 1442 bytes to just 529 bytes. This efficiency translates to reduced I/O, lower memory pressure, and better performance overall when working with large-scale JSON datasets.
+This highlights a dramatic advantage of the `json` type: **even while preserving full Unicode fidelity like `nvarchar(max)`, it consumes significantly less space**—in this example, a reduction from 1562 bytes to just 529 bytes. This efficiency translates to reduced I/O, lower memory pressure, and better performance overall when working with large-scale JSON datasets.
 
-> The `json` data type in SQL Server inherently supports Unicode, similar to `nvarchar`. This makes it safer than `varchar` for multilingual data and avoids the risk of character loss or corruption.
+The `json` data type in SQL Server inherently supports Unicode, similar to `nvarchar`. This makes it safer than `varchar` for multilingual data and avoids the risk of character loss or corruption. Yet still, even while stripped of the overhead of Unicode, it still consumes more space at 781 bytes, compared to the Unicode-supported value stored in the `json` data type at 529 bytes.
 
-> ⚠️ Storing JSON in `varchar(max)` can result in **data loss** if the JSON contains non-ASCII or multilingual Unicode characters. Always use `nvarchar` or `json` to preserve text integrity.
+## The `.modify()` Method
 
-GO
+Let's create a table with a native JSON column:
 
-````
+```sql
+CREATE TABLE Sales.JsonDemo
+(
+  JsonDemoId int IDENTITY PRIMARY KEY,
+  OrderNumber nvarchar(20),
+  OrderDetails json
+)
+```
 
-Depending on the structure and length of the JSON, the difference may range from modest to substantial.
+This table uses the new `json` data type for the `OrderDetails` column. Unlike `nvarchar(max)`, the `json` type enforces that all stored values are valid JSON. This improves performance, enables rich in-place modifications, and allows JSON-specific indexing and path enforcement.
 
-Let’s update an order to mark it as shipped:
+Now insert some sample documents:
+
+```sql
+INSERT INTO Sales.JsonDemo (OrderNumber, OrderDetails)
+VALUES
+('SO-1001', '
+  {
+    "customer": "Contoso",
+    "lines": [
+      { "productId": 712, "quantity": 2 },
+      { "productId": 937, "quantity": 1 }
+    ],
+    "shipped": false
+  }'),
+('SO-1002', '
+  {
+    "customer": "Fabrikam",
+    "lines": [
+      { "productId": 870, "quantity": 3 }
+    ],
+    "shipped": true
+  }')
+```
+
+Each row in this table contains an order with nested line items and a boolean flag. Although the JSON content is expressed as an ordinary string, defining the `OrderDetails` column as `json` ensures it is well-formed and can be manipulated efficiently once inserted in the table.
+
+Previously, JSON was stored as `nvarchar`, which treated the JSON payload as an unstructured string. This meant updates required overwriting the entire value and offered no storage or performance optimizations. The new `json` data type supports partial document updates via the `.modify()` method.
+
+Let’s use this method to update an order to mark it as shipped:
 
 ```sql
 UPDATE Sales.JsonDemo
@@ -152,6 +134,12 @@ WHERE OrderNumber = 'SO-1001'
 ```
 
 Unlike `nvarchar`, the `json` column understands JSON structure and can surgically replace a value inside the document without rewriting the entire blob.
+
+Now observe that the `shipped` field has been updated:
+```sql
+SELECT * FROM Sales.JsonDemo
+WHERE OrderNumber = 'SO-1001'
+```
 
 You can also insert or remove paths:
 
