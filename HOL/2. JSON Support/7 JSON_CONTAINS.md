@@ -129,6 +129,16 @@ GO
 - Paths with wildcards (`[*]`) search across all array elements; combine with dotted paths to inspect nested structures.
 - For complex containment (e.g., “object with specific subset of properties”), use a JSON literal as the second argument (not just a scalar).
 
+
+**Cleanup.**
+
+```sql
+-- Clean up
+DROP TABLE SampleData
+DROP TABLE Customer
+DROP TABLE Account
+```
+
 ___
 
 ▶ [Change Event Streaming](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/tree/main/HOL/3.%20Change%20Event%20Streaming)
