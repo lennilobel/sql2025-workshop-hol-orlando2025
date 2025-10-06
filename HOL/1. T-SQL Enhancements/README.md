@@ -18,5 +18,5 @@ The labs in this section are independent of one another, so it is not necessary 
 
 ___
 
-▶ [Lab: T-SQL Enhancements - UNISTR](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/blob/main/HOL/1.%20T-SQL%20Enhancements/1.%20UNISTR.md)
+▶ [Lab: UNISTR](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/blob/main/HOL/1.%20T-SQL%20Enhancements/1.%20UNISTR.md)
 

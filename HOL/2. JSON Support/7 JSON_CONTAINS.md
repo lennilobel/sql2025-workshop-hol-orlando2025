@@ -131,4 +131,4 @@ GO
 
 ___
 
-▶ [Change Event Streaming](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/tree/main/HOL/2.%20JSON%20Support)
+▶ [Change Event Streaming](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/tree/main/HOL/3.%20Change%20Event%20Streaming)

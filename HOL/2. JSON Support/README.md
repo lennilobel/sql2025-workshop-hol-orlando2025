@@ -15,5 +15,5 @@ This hands-on lab walks you through the new JSON features introduced in SQL Serv
 
 ___
 
-▶ [Lab: JSON Support - Native JSON Data Type](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/blob/main/HOL/1.%20T-SQL%20Enhancements/1.%20UNISTR.md)
+▶ [Lab: Native JSON Data Type](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/blob/main/HOL/2.%20JSON%20Support/1.%20Native%20JSON%20Data%20Type.md)
 
