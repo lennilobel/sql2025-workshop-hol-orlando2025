@@ -128,3 +128,7 @@ GO
 - `JSON_CONTAINS` compares using JSON semantics—number vs string types are distinct.
 - Paths with wildcards (`[*]`) search across all array elements; combine with dotted paths to inspect nested structures.
 - For complex containment (e.g., “object with specific subset of properties”), use a JSON literal as the second argument (not just a scalar).
+
+___
+
+▶ [Change Event Streaming](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/tree/main/HOL/2.%20JSON%20Support)
