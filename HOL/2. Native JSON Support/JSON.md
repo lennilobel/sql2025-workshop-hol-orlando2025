@@ -113,10 +113,10 @@ INSERT INTO Customer
 ```
 
 
-Valid JSON will load perfectly of course. The following code adds two customers with nested orders and credit cards. It does this using `OPENJSON` to parse and insert multiple rows from a JSON array stored in the `@CustomerJson` variable, which is declared as the new native `json` data type. Notice how the customer ID is extracted using `JSON_VALUE` for the primary key column, while the entire JSON object is stored in the `CustomerJson` column.
+Valid JSON will load perfectly of course. Run the following code to add two customers with nested orders and credit cards stored as JSON. This works by using `OPENJSON` to parse and insert multiple rows from the JSON array stored in the `@CustomerJson` variable. Notice how the customer ID is extracted using `JSON_VALUE` for the primary key column, while the entire JSON object is stored in the `CustomerJson` column.
 
 ```sql
-DECLARE @CustomerJson json = '
+DECLARE @CustomerJson nvarchar(max) = '
   [
     {
       "customerName": "John Doe",
@@ -228,48 +228,67 @@ FROM
   OPENJSON(@CustomerJson) AS e
 ```
 
-Run a quick query to see the inserted data:
+Now run a quick query to see the inserted data:
+
 ```sql
 SELECT * FROM Customer
 ```
 
+You'll need to widen the `CustomerJson` column in the results pane to view the full JSON content. Then scroll right to see all the properties.
 
-Each row in this table contains an order with nested line items and a boolean `shipped` property. Although the JSON content is expressed as an ordinary string, defining the `OrderDetails` column as `json` ensures it is well-formed and can be manipulated efficiently once inserted in the table.
+> Tip: Double-click the column divider to automatically widen the column to fit the full JSON content.
 
-Let’s use `.modify()` with `replace` to update an order to mark it as shipped:
-
-```sql
-UPDATE OrderJson
-SET OrderDetails.modify('replace $.shipped with true')
-WHERE OrderNumber = 'SO-1001'
-```
-
-Unlike `nvarchar`, the `json` column understands JSON structure and can surgically replace a value inside the document without rewriting the entire blob.
-
-Now observe that the `shipped` field has been updated:
-```sql
-SELECT *
-FROM OrderJson
-WHERE OrderNumber = 'SO-1001'
-```
-
-You can also insert or remove paths. For example, use `insert` to add a new `priority` property with a value of "high":
+Let’s use `.modify()` to change several JSON properties of a customer. The following code changes the `preferred` property from `false` to `true` and updates the `basket.status` from `"PENDING"` to `"DEAD"` for the customer with `CustomerId = 1002`. Notice how dotted notation is used to navigate into nested objects.
 
 ```sql
-UPDATE OrderJson
-SET OrderDetails.modify('insert $.priority = "high"')
-WHERE OrderNumber = 'SO-1001'
+SELECT * FROM Customer WHERE CustomerId = 1002
+
+-- Change preferred property from false to true
+UPDATE Customer
+SET CustomerJson.modify('$.preferred', 'true')
+WHERE CustomerId = 1002
+
+-- Change basket status property from PENDING to DEAD (shortening a string will perform 'in-place modification' internally)
+UPDATE Customer
+SET CustomerJson.modify('$.basket.status', 'DEAD')
+WHERE CustomerId = 1002
+
+SELECT * FROM Customer WHERE CustomerId = 1002
 ```
 
-Similarly, `remove` can be used to remove the `priority` property:
+Observe the difference between the two `SELECT` results. The `preferred` property has been changed to `true`, and the `basket.status` has been updated to `"DEAD"`.
+
+You can also create or delete properties. For example, the following code adds a new `priority` property with the value `"high"` to the customer:
 
 ```sql
-UPDATE OrderJson
-SET OrderDetails.modify('remove $.priority')
-WHERE OrderNumber = 'SO-1001'
+SELECT * FROM Customer WHERE CustomerId = 1002
+
+-- Create new priority property 
+UPDATE Customer
+SET CustomerJson.modify('$.priority', 'high')
+WHERE CustomerId = 1002
+
+SELECT * FROM Customer WHERE CustomerId = 1002
 ```
 
-And so, effectively, the `.modify()` method makes JSON updates as natural as relational updates.
+Observe that the new `priority` property has been appended to the end of the JSON object.
+
+Similarly, `.modify()` can also be used to remove the `priority` property, by supplying `NULL` as the property value:
+
+```sql
+SELECT * FROM Customer WHERE CustomerId = 1002
+
+-- Remove an existing field
+UPDATE Customer
+SET CustomerJson.modify('$.priority', NULL)
+WHERE CustomerId = 1002
+
+SELECT * FROM Customer WHERE CustomerId = 1002
+```
+
+And now, you can see that the `priority` property has been removed.
+
+These examples demonstrate that the `.modify()` method makes JSON updates as natural as relational updates.
 
 ## JSON Path Indexing with `CREATE JSON INDEX`
 
