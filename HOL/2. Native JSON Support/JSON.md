@@ -75,16 +75,18 @@ SELECT
 The results typically show:
 
 * `varchar(max)` size: 781 bytes
-* `nvarchar(max)` size: 1562 bytes (due to 2 bytes per Unicode character)
+* `nvarchar(max)` size: 1,562 bytes (due to 2 bytes per Unicode character)
 * `json` size: 529 bytes (thanks to its compact binary storage format)
 
-This highlights a dramatic advantage of the `json` type: **even while preserving full Unicode fidelity like `nvarchar(max)`, it consumes significantly less space**—in this example, a reduction from 1562 bytes to just 529 bytes. This efficiency translates to reduced I/O, lower memory pressure, and better performance overall when working with large-scale JSON datasets.
+This highlights a dramatic advantage of the `json` type: **even while preserving full Unicode fidelity like `nvarchar(max)`, it consumes significantly less space**—in this case, a reduction from 1,562 bytes to just 529 bytes. This efficiency translates to reduced I/O, lower memory pressure, and better performance overall when working with large-scale JSON datasets.
 
-The `json` data type in SQL Server inherently supports Unicode, similar to `nvarchar`. This makes it safer than `varchar` for multilingual data and avoids the risk of character loss or corruption. Yet still, even while stripped of the overhead of Unicode, it still consumes more space at 781 bytes, compared to the Unicode-supported value stored in the `json` data type at 529 bytes.
+The `json` data type in SQL Server inherently supports Unicode, similar to `nvarchar`. This makes it safer than `varchar` for multilingual data and avoids the risk of character loss or corruption. Yet, even while stripped of the overhead of Unicode, it still consumes more space at 781 bytes, compared to the Unicode-supporting version of the same content stored in the `json` data type at 529 bytes.
 
 ## The `.modify()` Method
 
-Let's create a table with a native JSON column:
+Previously, JSON was stored as `nvarchar`, which treated the JSON payload as an unstructured string. This meant updates required overwriting the entire value and offered no storage or performance optimizations. The new `json` data type supports partial document updates via the `.modify()` method.
+
+To demonstrate, let's first create a table with a native JSON column:
 
 ```sql
 CREATE TABLE Sales.JsonDemo
@@ -97,35 +99,32 @@ CREATE TABLE Sales.JsonDemo
 
 This table uses the new `json` data type for the `OrderDetails` column. Unlike `nvarchar(max)`, the `json` type enforces that all stored values are valid JSON. This improves performance, enables rich in-place modifications, and allows JSON-specific indexing and path enforcement.
 
-Now insert some sample documents:
+Now insert some sample order data:
 
 ```sql
-INSERT INTO Sales.JsonDemo (OrderNumber, OrderDetails)
-VALUES
-('SO-1001', '
-  {
-    "customer": "Contoso",
-    "lines": [
-      { "productId": 712, "quantity": 2 },
-      { "productId": 937, "quantity": 1 }
-    ],
-    "shipped": false
-  }'),
-('SO-1002', '
-  {
-    "customer": "Fabrikam",
-    "lines": [
-      { "productId": 870, "quantity": 3 }
-    ],
-    "shipped": true
-  }')
+INSERT INTO Sales.JsonDemo (OrderNumber, OrderDetails) VALUES
+  ('SO-1001', '
+    {
+      "customer": "Contoso",
+      "lines": [
+        { "productId": 712, "quantity": 2 },
+        { "productId": 937, "quantity": 1 }
+      ],
+      "shipped": false
+    }'),
+  ('SO-1002', '
+    {
+      "customer": "Fabrikam",
+      "lines": [
+        { "productId": 870, "quantity": 3 }
+      ],
+      "shipped": true
+    }')
 ```
 
-Each row in this table contains an order with nested line items and a boolean flag. Although the JSON content is expressed as an ordinary string, defining the `OrderDetails` column as `json` ensures it is well-formed and can be manipulated efficiently once inserted in the table.
+Each row in this table contains an order with nested line items and a boolean `shipped` property. Although the JSON content is expressed as an ordinary string, defining the `OrderDetails` column as `json` ensures it is well-formed and can be manipulated efficiently once inserted in the table.
 
-Previously, JSON was stored as `nvarchar`, which treated the JSON payload as an unstructured string. This meant updates required overwriting the entire value and offered no storage or performance optimizations. The new `json` data type supports partial document updates via the `.modify()` method.
-
-Let’s use this method to update an order to mark it as shipped:
+Let’s use `.modify()` with `replace` to update an order to mark it as shipped:
 
 ```sql
 UPDATE Sales.JsonDemo
@@ -137,33 +136,34 @@ Unlike `nvarchar`, the `json` column understands JSON structure and can surgical
 
 Now observe that the `shipped` field has been updated:
 ```sql
-SELECT * FROM Sales.JsonDemo
+SELECT *
+FROM Sales.JsonDemo
 WHERE OrderNumber = 'SO-1001'
 ```
 
-You can also insert or remove paths:
+You can also insert or remove paths. For example, use `insert` to add a new `priority` property with a value of "high":
 
 ```sql
--- Add a new field
 UPDATE Sales.JsonDemo
 SET OrderDetails.modify('insert $.priority = "high"')
 WHERE OrderNumber = 'SO-1001'
+```
 
--- Remove an existing field
+Similarly, `remove` can be used to remove the `priority` property:
+
+```sql
 UPDATE Sales.JsonDemo
 SET OrderDetails.modify('remove $.priority')
 WHERE OrderNumber = 'SO-1001'
 ```
 
-This makes JSON updates as natural as relational updates, with less overhead and cleaner syntax.
-
----
+And so, effectively, the `.modify()` method makes JSON updates as natural as relational updates.
 
 ## JSON Path Indexing with `CREATE JSON INDEX`
 
-To enable fast filtering, SQL Server 2025 introduces native JSON indexing. Instead of writing computed columns or `OPENJSON` wrappers, you can declare a JSON index directly on paths.
+To enable fast filtering, SQL Server 2025 introduces native JSON indexing. Instead of creating and indexing computed columns, you can declare a JSON index directly on property paths.
 
-This provides an alternative to the legacy approach used in earlier versions of SQL Server. Previously, developers would create **computed columns** based on `JSON_VALUE()` expressions and then index those columns. While effective, this method required more schema scaffolding and introduced some maintenance overhead. It also persisted the computed values, which could consume additional storage depending on the use case. However, this approach remains viable—especially when dealing with fixed, flat JSON paths and when targeting compatibility with SQL Server versions prior to 2025.
+This provides an alternative to the legacy approach used in earlier versions of SQL Server. Previously, developers would create **computed columns** based on `JSON_VALUE()` expressions and then index those columns. While effective, this method required more schema scaffolding and introduced some maintenance overhead. It also persisted the computed values, which would consume additional storage. However, this approach remains viable—especially when dealing with fixed, flat JSON paths and when targeting compatibility with SQL Server versions prior to 2025.
 
 In contrast, `CREATE JSON INDEX` in SQL Server 2025 allows you to define **JSON path indexes directly** against native `json` columns. SQL Server transparently builds and maintains a specialized index structure behind the scenes, with full awareness of the JSON document structure. These indexes are more efficient, easier to maintain, and allow more expressive querying without schema bloat.
 
