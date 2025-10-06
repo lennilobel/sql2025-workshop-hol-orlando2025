@@ -89,9 +89,9 @@ Previously, JSON was stored as `nvarchar`, which treated the JSON payload as an 
 To demonstrate, let's first create a table with a native JSON column:
 
 ```sql
-CREATE TABLE Sales.JsonDemo
+CREATE TABLE OrderJson
 (
-  JsonDemoId int IDENTITY PRIMARY KEY,
+  OrderJsonId int IDENTITY PRIMARY KEY,
   OrderNumber nvarchar(20),
   OrderDetails json
 )
@@ -102,7 +102,7 @@ This table uses the new `json` data type for the `OrderDetails` column. Unlike `
 Now insert some sample order data:
 
 ```sql
-INSERT INTO Sales.JsonDemo (OrderNumber, OrderDetails) VALUES
+INSERT INTO OrderJson (OrderNumber, OrderDetails) VALUES
   ('SO-1001', '
     {
       "customer": "Contoso",
@@ -127,7 +127,7 @@ Each row in this table contains an order with nested line items and a boolean `s
 Let’s use `.modify()` with `replace` to update an order to mark it as shipped:
 
 ```sql
-UPDATE Sales.JsonDemo
+UPDATE OrderJson
 SET OrderDetails.modify('replace $.shipped with true')
 WHERE OrderNumber = 'SO-1001'
 ```
@@ -137,14 +137,14 @@ Unlike `nvarchar`, the `json` column understands JSON structure and can surgical
 Now observe that the `shipped` field has been updated:
 ```sql
 SELECT *
-FROM Sales.JsonDemo
+FROM OrderJson
 WHERE OrderNumber = 'SO-1001'
 ```
 
 You can also insert or remove paths. For example, use `insert` to add a new `priority` property with a value of "high":
 
 ```sql
-UPDATE Sales.JsonDemo
+UPDATE OrderJson
 SET OrderDetails.modify('insert $.priority = "high"')
 WHERE OrderNumber = 'SO-1001'
 ```
@@ -152,7 +152,7 @@ WHERE OrderNumber = 'SO-1001'
 Similarly, `remove` can be used to remove the `priority` property:
 
 ```sql
-UPDATE Sales.JsonDemo
+UPDATE OrderJson
 SET OrderDetails.modify('remove $.priority')
 WHERE OrderNumber = 'SO-1001'
 ```
@@ -173,7 +173,7 @@ Try a simple filter:
 
 ```sql
 SELECT OrderNumber
-FROM Sales.JsonDemo
+FROM OrderJson
 WHERE JSON_VALUE(OrderDetails, '$.lines[*].productId') = '712'
 ```
 
@@ -186,7 +186,7 @@ Let’s walk through how to confirm this using an execution plan:
 
 ```sql
 SELECT OrderNumber
-FROM Sales.JsonDemo
+FROM OrderJson
 WHERE JSON_VALUE(OrderDetails, '$.lines[*].productId') = '712'
 ```
 
@@ -195,7 +195,7 @@ WHERE JSON_VALUE(OrderDetails, '$.lines[*].productId') = '712'
 
 ```sql
 CREATE JSON INDEX IX_JsonDemo_ProductIds
-ON Sales.JsonDemo (OrderDetails)
+ON OrderJson (OrderDetails)
 ON PATH '$.lines[*].productId'
 ```
 
@@ -203,7 +203,7 @@ ON PATH '$.lines[*].productId'
 
 ```sql
 SELECT OrderNumber
-FROM Sales.JsonDemo
+FROM OrderJson
 WHERE JSON_VALUE(OrderDetails, '$.lines[*].productId') = '712'
 ```
 
@@ -221,7 +221,7 @@ To understand what paths are indexed and how they’re interpreted, use the new 
 ```sql
 SELECT *
 FROM sys.json_index_paths
-WHERE object_id = OBJECT_ID('Sales.JsonDemo')
+WHERE object_id = OBJECT_ID('OrderJson')
 ```
 
 This view shows the full JSON path, data type, and whether the path is nullable. This metadata helps you validate and troubleshoot JSON indexing configurations.
@@ -236,7 +236,7 @@ Example: Find all orders that include a line with `productId = 712`.
 
 ```sql
 SELECT OrderNumber
-FROM Sales.JsonDemo
+FROM OrderJson
 WHERE JSON_CONTAINS(OrderDetails, '{ "productId": 712 }')
 ```
 
@@ -247,7 +247,7 @@ You can also match nested properties:
 ```sql
 -- Match a full subobject
 SELECT OrderNumber
-FROM Sales.JsonDemo
+FROM OrderJson
 WHERE JSON_CONTAINS(OrderDetails, '{ "lines": [ { "productId": 712 } ] }')
 ```
 
@@ -264,14 +264,14 @@ List all product IDs in every order:
 ```sql
 SELECT OrderNumber,
        JSON_VALUE(OrderDetails, '$.lines[*].productId') AS AnyProductId
-FROM Sales.JsonDemo
+FROM OrderJson
 ```
 
 Note that `JSON_VALUE(..., '$.lines[*].productId')` returns the first match only. Use `OPENJSON` for full expansion:
 
 ```sql
 SELECT OrderNumber, v.value AS ProductId
-FROM Sales.JsonDemo
+FROM OrderJson
 CROSS APPLY OPENJSON(OrderDetails, '$.lines') WITH (productId int '$.productId') AS v
 ```
 
@@ -287,7 +287,7 @@ This is useful for downstream APIs expecting JSON arrays.
 
 ```sql
 SELECT JSON_QUERY(OrderDetails, '$.lines[0]' WITH ARRAY WRAPPER) AS FirstLineAsArray
-FROM Sales.JsonDemo
+FROM OrderJson
 ```
 
 This ensures consistency regardless of the number of matched items.
@@ -302,7 +302,7 @@ Get the first quantity as an integer:
 
 ```sql
 SELECT JSON_VALUE(OrderDetails, '$.lines[0].quantity' RETURNING int) AS FirstQuantity
-FROM Sales.JsonDemo
+FROM OrderJson
 ```
 
 This removes the need for external `CAST()` calls and provides better validation and error reporting.
