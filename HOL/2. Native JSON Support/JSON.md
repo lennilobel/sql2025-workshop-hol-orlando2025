@@ -89,38 +89,150 @@ Previously, JSON was stored as `nvarchar`, which treated the JSON payload as an 
 To demonstrate, let's first create a table with a native JSON column:
 
 ```sql
-CREATE TABLE OrderJson
+CREATE TABLE Customer
 (
-  OrderJsonId int IDENTITY PRIMARY KEY,
-  OrderNumber nvarchar(20),
-  OrderDetails json
+  CustomerId    int PRIMARY KEY,
+  CustomerJson  json
 )
 ```
 
-This table uses the new `json` data type for the `OrderDetails` column. Unlike `nvarchar(max)`, the `json` type enforces that all stored values are valid JSON. This improves performance, enables rich in-place modifications, and allows JSON-specific indexing and path enforcement.
+This table uses the new `json` data type for the `CustomerJson` column. Unlike `nvarchar(max)`, the `json` type enforces that all stored values are valid JSON. This improves performance, enables rich in-place modifications, and allows JSON-specific indexing and path enforcement.
 
-Now insert some sample order data:
+First, try and insert some invalid JSON to see the validation in action. This statement should fail because the JSON is malformed:
 
 ```sql
-INSERT INTO OrderJson (OrderNumber, OrderDetails) VALUES
-  ('SO-1001', '
-    {
-      "customer": "Contoso",
-      "lines": [
-        { "productId": 712, "quantity": 2 },
-        { "productId": 937, "quantity": 1 }
-      ],
-      "shipped": false
-    }'),
-  ('SO-1002', '
-    {
-      "customer": "Fabrikam",
-      "lines": [
-        { "productId": 870, "quantity": 3 }
-      ],
-      "shipped": true
-    }')
+INSERT INTO Customer
+  VALUES (1, '{ "name": "Alice", "age": 30 ')  -- Missing closing brace
 ```
+
+This statement will also fail because it's not valid JSON at all:
+
+```sql
+INSERT INTO Customer
+  VALUES (1, 'Just a plain string')
+```
+
+
+Valid JSON will load perfectly of course. The following code adds two customers with nested orders and credit cards. It does this using `OPENJSON` to parse and insert multiple rows from a JSON array stored in the `@CustomerJson` variable, which is declared as the new native `json` data type. Notice how the customer ID is extracted using `JSON_VALUE` for the primary key column, while the entire JSON object is stored in the `CustomerJson` column.
+
+```sql
+DECLARE @CustomerJson json = '
+  [
+    {
+      "customerName": "John Doe",
+      "customerId": 1001,
+      "orders": [
+        { "productId": 712, "quantity": 2 },
+        { "productId": 937, "quantity": 1 },
+        { "productId": 101, "quantity": 4 },
+        { "productId": 214, "quantity": 7 },
+        { "productId": 325, "quantity": 1 },
+        { "productId": 476, "quantity": 5 },
+        { "productId": 583, "quantity": 3 },
+        { "productId": 699, "quantity": 2 },
+        { "productId": 805, "quantity": 6 },
+        { "productId": 912, "quantity": 1 },
+        { "productId": 1033, "quantity": 8 },
+        { "productId": 1144, "quantity": 2 },
+        { "productId": 1205, "quantity": 4 },
+        { "productId": 1310, "quantity": 3 },
+        { "productId": 1458, "quantity": 5 },
+        { "productId": 1520, "quantity": 6 },
+        { "productId": 1629, "quantity": 1 },
+        { "productId": 1740, "quantity": 7 },
+        { "productId": 1833, "quantity": 2 },
+        { "productId": 1902, "quantity": 4 },
+        { "productId": 2011, "quantity": 8 },
+        { "productId": 2155, "quantity": 3 },
+        { "productId": 2288, "quantity": 5 },
+        { "productId": 2390, "quantity": 2 },
+        { "productId": 2401, "quantity": 1 },
+        { "productId": 2533, "quantity": 6 },
+        { "productId": 2689, "quantity": 3 },
+        { "productId": 2754, "quantity": 7 },
+        { "productId": 2861, "quantity": 8 },
+        { "productId": 2977, "quantity": 2 },
+        { "productId": 3050, "quantity": 4 },
+        { "productId": 3198, "quantity": 1 }
+      ],
+      "creditCards": [
+        {
+          "type": "American Express",
+          "number": "675984450768756054",
+          "currency": "USD"
+        },
+        {
+          "type": "Visa",
+          "number": "3545138777072343",
+          "currency": "USD"
+        },
+        {
+          "type": "MasterCard",
+          "number": "6397068371771473",
+          "currency": "CAD"
+        },
+        {
+          "type": "Discover",
+          "number": "6011000990139424",
+          "currency": "EUR"
+        },
+        {
+          "type": "JCB",
+          "number": "3530111333300000",
+          "currency": "GBP"
+        }
+      ],
+      "balance": 25.99,
+      "status": "processing",
+      "basket": {
+        "status": "PENDING",
+        "lastUpdated": "2025-06-07T07:32:00Z"
+      },
+      "preferred": false
+    },
+    {
+      "customerName": "Jane Smith",
+      "customerId": 1002,
+      "orders": [
+        { "productId": 894, "quantity": 5 },
+        { "productId": 3001, "quantity": 1 }
+      ],
+      "creditCards": [
+        {
+          "type": "Visa",
+          "number": "4111111111111111",
+          "currency": "USD"
+        },
+        {
+          "type": "MasterCard",
+          "number": "5500000000000004",
+          "currency": "CAD"
+        }
+      ],
+      "balance": 99.95,
+      "status": "processing",
+      "basket": {
+        "status": "PENDING",
+        "lastUpdated": "2025-05-18T13:18:00Z"
+      },
+      "preferred": false
+    }
+  ]
+'
+
+INSERT INTO Customer
+SELECT
+  CustomerId = JSON_VALUE(e.value, '$.customerId'),
+  CustomerJson = e.value
+FROM
+  OPENJSON(@CustomerJson) AS e
+```
+
+Run a quick query to see the inserted data:
+```sql
+SELECT * FROM Customer
+```
+
 
 Each row in this table contains an order with nested line items and a boolean `shipped` property. Although the JSON content is expressed as an ordinary string, defining the `OrderDetails` column as `json` ensures it is well-formed and can be manipulated efficiently once inserted in the table.
 
