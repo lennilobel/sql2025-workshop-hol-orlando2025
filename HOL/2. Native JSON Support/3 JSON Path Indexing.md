@@ -1,0 +1,209 @@
+﻿## JSON Path Indexing
+
+To enable fast filtering, SQL Server 2025 introduces native JSON indexing. Instead of creating and indexing computed columns, you can declare a JSON index directly on property paths.
+
+This provides an alternative to the legacy approach used in earlier versions of SQL Server. Previously, developers would create **computed columns** based on `JSON_VALUE()` expressions and then index those columns. While effective, this method required more schema scaffolding and introduced some maintenance overhead. It also persisted the computed values, which would consume additional storage. However, this approach remains viable—especially when dealing with fixed, flat JSON paths and when targeting compatibility with SQL Server versions prior to 2025.
+
+In contrast, `CREATE JSON INDEX` in SQL Server 2025 allows you to define **JSON path indexes directly** against native `json` columns. SQL Server transparently builds and maintains a specialized index structure behind the scenes, with full awareness of the JSON document structure. These indexes are more efficient, easier to maintain, and allow more expressive querying without schema bloat.
+
+GPT: Generate the explanatory text for the rest of this section
+
+```sql
+SELECT * FROM Customer
+
+-- Before 2025, we could only index scalar properties by creating and then indexing computed columns with JSON_VALUE
+ALTER TABLE Customer
+ ADD BasketStatus AS JSON_VALUE(CustomerJson, '$.basket.status')
+GO
+
+CREATE INDEX IX_Order_BasketStatus
+ ON Customer(BasketStatus)
+
+SELECT * FROM Customer
+WHERE BasketStatus = 'PENDING'
+
+DROP INDEX IX_Order_BasketStatus
+ ON Customer
+
+ALTER TABLE Customer
+ DROP COLUMN BasketStatus
+```
+
+```sql
+-- Now we have native JSON indexes that can point either scalar or complex (nested object/array) properties
+
+-- Create a JSON index that covers the basket property (and all nested properties)
+CREATE JSON INDEX IX_Customer_CustomerJson_Basket
+ON Customer (CustomerJson)
+FOR ('$.basket')
+```
+
+```sql
+SELECT * FROM sys.indexes WHERE type = 9
+SELECT * FROM sys.json_index_paths
+```
+
+```sql
+-- Execution plan shows no index being used; we must explicitly reference the index with a hint
+--  (Preview note: the heuristics for using rowcount and statistics to pick a JSON index for query plan is not complete)
+SELECT *
+FROM Customer
+WHERE JSON_VALUE(CustomerJson, '$.basket.status') = 'PENDING'
+
+-- This query will leverage the JSON index
+--  (Preview note: the index hint is required for now, but in the future it will be automatically picked up by the query optimizer)
+SELECT *
+FROM Customer WITH (INDEX (IX_Customer_CustomerJson_Basket))
+WHERE JSON_VALUE(CustomerJson, '$.basket.status') = 'PENDING'
+
+-- This query generates an error because the JSON index it references does not cover the JSON property being queried ($.status)
+/*
+SELECT *
+FROM Customer WITH (INDEX (IX_Customer_CustomerJson_Basket))
+WHERE JSON_VALUE(CustomerJson, '$.status') = 'processing'
+*/
+```
+
+```sql
+-- Only one JSON index can be created per table, so we must drop the previous one before creating a new one
+DROP INDEX IX_Customer_CustomerJson_Basket ON Customer
+```
+
+```sql
+-- Create a JSON index that covers the entire JSON document (with all nested properties)
+CREATE JSON INDEX IX_Customer_CustomerJson_All
+ON Customer (CustomerJson)
+FOR ('$')
+```
+
+```sql
+SELECT * FROM sys.indexes WHERE type = 9
+SELECT * FROM sys.json_index_paths
+```
+
+```sql
+-- The JSON index will be leveraged for any query that references any property in the JSON document
+SELECT *
+FROM Customer WITH (INDEX (IX_Customer_CustomerJson_All))
+WHERE JSON_VALUE(CustomerJson, '$.status') = 'processing'
+
+SELECT *
+FROM Customer WITH (INDEX (IX_Customer_CustomerJson_All))
+WHERE JSON_VALUE(CustomerJson, '$.basket.status') = 'PENDING'
+```
+
+```sql
+DROP INDEX IX_Customer_CustomerJson_All ON Customer
+```
+
+## JSON Path Indexing
+
+To enable fast filtering, SQL Server 2025 introduces native JSON indexing. Instead of creating and indexing computed columns, you can declare a JSON index directly on property paths.
+
+This provides an alternative to the legacy approach used in earlier versions of SQL Server. Previously, developers would create **computed columns** based on `JSON_VALUE()` expressions and then index those columns. While effective, this method required more schema scaffolding and introduced some maintenance overhead. It also persisted the computed values, which would consume additional storage. However, this approach remains viable—especially when dealing with fixed, flat JSON paths and when targeting compatibility with SQL Server versions prior to 2025.
+
+In contrast, `CREATE JSON INDEX` in SQL Server 2025 allows you to define **JSON path indexes directly** against native `json` columns. SQL Server transparently builds and maintains a specialized index structure behind the scenes, with full awareness of the JSON document structure. These indexes are more efficient, easier to maintain, and allow more expressive querying without schema bloat.
+
+**What the next script does:** It first shows the *pre‑2025* pattern (computed column + B‑tree index), then queries on that value, and finally cleans up. This is a baseline for comparison with native JSON indexes.
+
+```sql
+SELECT * FROM Customer
+
+-- Before 2025, we could only index scalar properties by creating and then indexing computed columns with JSON_VALUE
+ALTER TABLE Customer
+ ADD BasketStatus AS JSON_VALUE(CustomerJson, '$.basket.status')
+GO
+
+CREATE INDEX IX_Order_BasketStatus
+ ON Customer(BasketStatus)
+
+SELECT * FROM Customer
+WHERE BasketStatus = 'PENDING'
+
+DROP INDEX IX_Order_BasketStatus
+ ON Customer
+
+ALTER TABLE Customer
+ DROP COLUMN BasketStatus
+```
+
+**Create a native JSON index.** The index below **covers the `$.basket` subtree**, allowing efficient predicates over any path within `basket` (e.g., `$.basket.status`).
+
+```sql
+-- Now we have native JSON indexes that can point either scalar or complex (nested object/array) properties
+
+-- Create a JSON index that covers the basket property (and all nested properties)
+CREATE JSON INDEX IX_Customer_CustomerJson_Basket
+ON Customer (CustomerJson)
+FOR ('$.basket')
+```
+
+**Inspect metadata.** Type `9` identifies JSON indexes. `sys.json_index_paths` shows which paths are materialized for the index key.
+
+```sql
+SELECT * FROM sys.indexes WHERE type = 9
+SELECT * FROM sys.json_index_paths
+```
+
+**Use the index.** During preview, the optimizer may not auto‑select JSON indexes; use an index hint to force it. The first query likely scans; the second should seek via the JSON index.
+
+```sql
+-- Execution plan shows no index being used; we must explicitly reference the index with a hint
+--  (Preview note: the heuristics for using rowcount and statistics to pick a JSON index for query plan is not complete)
+SELECT *
+FROM Customer
+WHERE JSON_VALUE(CustomerJson, '$.basket.status') = 'PENDING'
+
+-- This query will leverage the JSON index
+--  (Preview note: the index hint is required for now, but in the future it will be automatically picked up by the query optimizer)
+SELECT *
+FROM Customer WITH (INDEX (IX_Customer_CustomerJson_Basket))
+WHERE JSON_VALUE(CustomerJson, '$.basket.status') = 'PENDING'
+
+-- This query generates an error because the JSON index it references does not cover the JSON property being queried ($.status)
+/*
+SELECT *
+FROM Customer WITH (INDEX (IX_Customer_CustomerJson_Basket))
+WHERE JSON_VALUE(CustomerJson, '$.status') = 'processing'
+*/
+```
+
+**One JSON index per table (current limitation).** Drop and recreate to cover different paths. The following switches to a **document‑wide** index (root `$`), which can satisfy any path predicate.
+
+```sql
+-- Only one JSON index can be created per table, so we must drop the previous one before creating a new one
+DROP INDEX IX_Customer_CustomerJson_Basket ON Customer
+```
+
+```sql
+-- Create a JSON index that covers the entire JSON document (with all nested properties)
+CREATE JSON INDEX IX_Customer_CustomerJson_All
+ON Customer (CustomerJson)
+FOR ('$')
+```
+
+**Confirm coverage.**
+
+```sql
+SELECT * FROM sys.indexes WHERE type = 9
+SELECT * FROM sys.json_index_paths
+```
+
+**Demonstrate usage.** With a root‑covering index, both predicates below can benefit.
+
+```sql
+-- The JSON index will be leveraged for any query that references any property in the JSON document
+SELECT *
+FROM Customer WITH (INDEX (IX_Customer_CustomerJson_All))
+WHERE JSON_VALUE(CustomerJson, '$.status') = 'processing'
+
+SELECT *
+FROM Customer WITH (INDEX (IX_Customer_CustomerJson_All))
+WHERE JSON_VALUE(CustomerJson, '$.basket.status') = 'PENDING'
+```
+
+**Cleanup for the section.**
+
+```sql
+DROP INDEX IX_Customer_CustomerJson_All ON Customer
+```

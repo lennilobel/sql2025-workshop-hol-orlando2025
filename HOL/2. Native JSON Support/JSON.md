@@ -385,9 +385,123 @@ WHERE JSON_VALUE(CustomerJson, '$.basket.status') = 'PENDING'
 DROP INDEX IX_Customer_CustomerJson_All ON Customer
 ```
 
+## JSON Path Indexing
+
+To enable fast filtering, SQL Server 2025 introduces native JSON indexing. Instead of creating and indexing computed columns, you can declare a JSON index directly on property paths.
+
+This provides an alternative to the legacy approach used in earlier versions of SQL Server. Previously, developers would create **computed columns** based on `JSON_VALUE()` expressions and then index those columns. While effective, this method required more schema scaffolding and introduced some maintenance overhead. It also persisted the computed values, which would consume additional storage. However, this approach remains viable—especially when dealing with fixed, flat JSON paths and when targeting compatibility with SQL Server versions prior to 2025.
+
+In contrast, `CREATE JSON INDEX` in SQL Server 2025 allows you to define **JSON path indexes directly** against native `json` columns. SQL Server transparently builds and maintains a specialized index structure behind the scenes, with full awareness of the JSON document structure. These indexes are more efficient, easier to maintain, and allow more expressive querying without schema bloat.
+
+**What the next script does:** It first shows the *pre‑2025* pattern (computed column + B‑tree index), then queries on that value, and finally cleans up. This is a baseline for comparison with native JSON indexes.
+
+```sql
+SELECT * FROM Customer
+
+-- Before 2025, we could only index scalar properties by creating and then indexing computed columns with JSON_VALUE
+ALTER TABLE Customer
+ ADD BasketStatus AS JSON_VALUE(CustomerJson, '$.basket.status')
+GO
+
+CREATE INDEX IX_Order_BasketStatus
+ ON Customer(BasketStatus)
+
+SELECT * FROM Customer
+WHERE BasketStatus = 'PENDING'
+
+DROP INDEX IX_Order_BasketStatus
+ ON Customer
+
+ALTER TABLE Customer
+ DROP COLUMN BasketStatus
+```
+
+**Create a native JSON index.** The index below **covers the `$.basket` subtree**, allowing efficient predicates over any path within `basket` (e.g., `$.basket.status`).
+
+```sql
+-- Now we have native JSON indexes that can point either scalar or complex (nested object/array) properties
+
+-- Create a JSON index that covers the basket property (and all nested properties)
+CREATE JSON INDEX IX_Customer_CustomerJson_Basket
+ON Customer (CustomerJson)
+FOR ('$.basket')
+```
+
+**Inspect metadata.** Type `9` identifies JSON indexes. `sys.json_index_paths` shows which paths are materialized for the index key.
+
+```sql
+SELECT * FROM sys.indexes WHERE type = 9
+SELECT * FROM sys.json_index_paths
+```
+
+**Use the index.** During preview, the optimizer may not auto‑select JSON indexes; use an index hint to force it. The first query likely scans; the second should seek via the JSON index.
+
+```sql
+-- Execution plan shows no index being used; we must explicitly reference the index with a hint
+--  (Preview note: the heuristics for using rowcount and statistics to pick a JSON index for query plan is not complete)
+SELECT *
+FROM Customer
+WHERE JSON_VALUE(CustomerJson, '$.basket.status') = 'PENDING'
+
+-- This query will leverage the JSON index
+--  (Preview note: the index hint is required for now, but in the future it will be automatically picked up by the query optimizer)
+SELECT *
+FROM Customer WITH (INDEX (IX_Customer_CustomerJson_Basket))
+WHERE JSON_VALUE(CustomerJson, '$.basket.status') = 'PENDING'
+
+-- This query generates an error because the JSON index it references does not cover the JSON property being queried ($.status)
+/*
+SELECT *
+FROM Customer WITH (INDEX (IX_Customer_CustomerJson_Basket))
+WHERE JSON_VALUE(CustomerJson, '$.status') = 'processing'
+*/
+```
+
+**One JSON index per table (current limitation).** Drop and recreate to cover different paths. The following switches to a **document‑wide** index (root `$`), which can satisfy any path predicate.
+
+```sql
+-- Only one JSON index can be created per table, so we must drop the previous one before creating a new one
+DROP INDEX IX_Customer_CustomerJson_Basket ON Customer
+```
+
+```sql
+-- Create a JSON index that covers the entire JSON document (with all nested properties)
+CREATE JSON INDEX IX_Customer_CustomerJson_All
+ON Customer (CustomerJson)
+FOR ('$')
+```
+
+**Confirm coverage.**
+
+```sql
+SELECT * FROM sys.indexes WHERE type = 9
+SELECT * FROM sys.json_index_paths
+```
+
+**Demonstrate usage.** With a root‑covering index, both predicates below can benefit.
+
+```sql
+-- The JSON index will be leveraged for any query that references any property in the JSON document
+SELECT *
+FROM Customer WITH (INDEX (IX_Customer_CustomerJson_All))
+WHERE JSON_VALUE(CustomerJson, '$.status') = 'processing'
+
+SELECT *
+FROM Customer WITH (INDEX (IX_Customer_CustomerJson_All))
+WHERE JSON_VALUE(CustomerJson, '$.basket.status') = 'PENDING'
+```
+
+**Cleanup for the section.**
+
+```sql
+DROP INDEX IX_Customer_CustomerJson_All ON Customer
+```
+
 ## JSON Path Expression Array Enhancements
 
-GPT: Generate the explanatory text for this section
+SQL Server 2025 expands JSON path syntax so you can address **array elements with wildcards, ranges, and positional lists**, and it adds support for `last` to reference the final element. This makes extraction and containment checks far more expressive without resorting to `OPENJSON` hacks.
+
+**Counting array elements.** While there isn’t a built‑in `JSON_ARRAY_LENGTH` function, we can still count with `OPENJSON`. The snippet below shows both the (commented) hypothetical function and the practical workaround.
 
 ```sql
 -- How many credit cards does each customer have?
@@ -409,6 +523,8 @@ FROM
     Customer
 ```
 
+**Pre‑2025 array access.** You could reference fixed positions only (`[0]`, `[1]`) and dot into those objects for fields like `type`.
+
 ```sql
 -- Before SQL Server 2025, array references in JSON path expressions were very limited
 SELECT
@@ -421,6 +537,8 @@ SELECT
 FROM
     Customer AS e
 ```
+
+**2025 enhancements.** Wildcards (`[*]`), ranges (`[0 to 2]`), positional lists (`[0, last]`), and `last` enable batch extraction. `WITH ARRAY WRAPPER` ensures the result is always an array even when paths match a single element.
 
 ```sql
 -- SQL Server 2025 supports array wildcard and range references with JSON_QUERY, JSON_PATH_EXISTS, and JSON_CONTAINS
@@ -442,13 +560,15 @@ FROM
 
 ## JSON Aggregates
 
-SQL Server 2025 introduces new JSON aggregate functions that simplify the construction of JSON arrays and objects from relational data.
+SQL Server 2025 introduces **JSON aggregate functions** that make it trivial to generate arrays and objects directly in SQL: `JSON_ARRAY`, `JSON_ARRAYAGG`, `JSON_OBJECT`, and `JSON_OBJECTAGG`. These functions pair naturally with joins, grouping, and windowing, so you can shape hierarchical JSON from relational sources without string concatenation.
 
-GPT: Generate the explanatory text for the rest of this section
+**Reset transient objects for this section.**
 
 ```sql
 DROP TABLE IF EXISTS Customer
 ```
+
+**Create simple order and account tables.** We’ll join them to compose nested JSON shapes.
 
 ```sql
 CREATE TABLE Customer (
@@ -469,11 +589,15 @@ CREATE TABLE Account (
 )
 ```
 
+**Seed account data.**
+
 ```sql
 INSERT INTO Account VALUES
   ('AW29825', '(123) 456-7890', '(123) 567-8901', NULL),
   ('AW73565', '(234) 987-6543', NULL,             NULL)
 ```
+
+**Load orders from JSON.** Here we demonstrate ingest via `OPENJSON` into the `Customer` table.
 
 ```sql
 -- Input JSON document containing a JSON array where each element is a JSON object
@@ -507,10 +631,14 @@ FROM
 GO
 ```
 
+**Quick sanity check.**
+
 ```sql
 SELECT * FROM Customer
 SELECT * FROM Account
 ```
+
+**Build nested objects per row.** First, a joined rowset shows the relational shape; next, `JSON_OBJECT` nests account details and phone numbers via an inner `JSON_OBJECT` and `JSON_ARRAY`. Finally, `JSON_OBJECTAGG` collects per‑customer objects into a single object keyed by `CustomerId`.
 
 ```sql
 -- JSON_OBJECTAGG
@@ -562,6 +690,8 @@ FROM
   INNER JOIN Account AS a ON a.AccountNumber = o.AccountNumber
 ```
 
+**Array construction with `JSON_ARRAY` and aggregation with `JSON_ARRAYAGG`.** The first two queries produce arrays of phone numbers; the third aggregates all accounts’ phone arrays into a single array of arrays.
+
 ```sql
 -- JSON_ARRAYAGG
 
@@ -597,6 +727,8 @@ SELECT
   Account
 ```
 
+**More aggregate patterns.** Here we generate: (1) all amounts as an array, (2) a name→amount object map, and (3) a conventional numeric total—all from the same source table.
+
 ```sql
 -- More JSON aggregates
 CREATE TABLE SampleData (
@@ -622,6 +754,8 @@ SELECT
 FROM
   SampleData
 ```
+
+**Grouping with JSON aggregates.** You can combine JSON aggregates with `GROUP BY` to produce per‑group arrays/objects and scalar totals. Then, show more granularity with `(Category, Type)` groups.
 
 ```sql
 -- JSON aggregates with GROUP BY
@@ -649,6 +783,8 @@ GROUP BY
   Type
 ```
 
+**Windowed JSON aggregates.** Use `OVER (PARTITION BY ...)` to add per‑partition JSON shapes as columns on every row in that partition.
+
 ```sql
 -- JSON aggregates with OVER
 
@@ -661,6 +797,8 @@ SELECT
 FROM
   SampleData
 ```
+
+**Multiple grouping levels with `GROUPING SETS`.** Produce arrays/objects/totals at several grains (Category only, Type only, both, and grand total).
 
 ```sql
 -- JSON aggregates with GROUPING SETS
@@ -685,6 +823,8 @@ ORDER BY
   Type
 ```
 
+**Cleanup.**
+
 ```sql
 -- Clean up
 DROP TABLE SampleData
@@ -694,9 +834,11 @@ DROP TABLE Account
 
 ## Type-Safe Extraction with `RETURNING` Clause
 
-The `RETURNING` clause in `JSON_VALUE` allows you to specify the expected return type directly within the function call. This provides stronger typing, better validation, and clearer intent compared to the previous approach of using `CAST()` or `TRY_CAST()` externally.
+The `RETURNING` clause on `JSON_VALUE` lets you specify a SQL type for the extracted scalar—improving correctness and plan quality compared with wrapping the function in an external `CAST/CONVERT`. It is **ANSI‑compliant** and avoids surprises with string comparisons.
 
-GPT: Generate the explanatory text for the rest of this section
+**Why this matters:** `JSON_VALUE` traditionally returns `nvarchar(4000)`. Comparing that to a number uses string semantics (e.g., `'100' < '9'`). You must coerce to a numeric type to get proper numeric comparisons. `RETURNING` bakes the coercion into the extraction.
+
+**What the script shows:** The first statement (guarded by `IF 1=0`) illustrates the kind of comparison that would fail. The second demonstrates explicit `CAST`. The third uses `RETURNING` for stronger typing. (Note: In preview builds, `RETURNING` may be limited to integer types.)
 
 ```sql
 -- Throws error because the JSON_VALUE function return nvarchar by default, and so the numeric > operator fails
@@ -712,9 +854,14 @@ SELECT * FROM Customer WHERE JSON_VALUE(CustomerJson, '$.balance' RETURNING int)
 
 ## Flexible Matching with `JSON_CONTAINS`
 
-The new `JSON_CONTAINS` predicate checks whether one JSON document is semantically contained within another.
+`JSON_CONTAINS` checks whether a **candidate value or structure** is present at a path (or set of paths) inside a JSON document. It is **type‑aware** and understands arrays, objects, and scalars. This eliminates brittle text searches and reduces the need to shred data for simple containment predicates.
 
-GPT: Generate the explanatory text for the rest of this section
+**General behavior:**
+- The first argument is the *document to search*.
+- The second is the *value to find* (scalar or JSON literal).
+- The third is the *JSON path* to search within; wildcards and array selectors are supported.
+
+**Examples below** demonstrate containment of integers, strings, booleans, and nested array values, including searching across all objects in a root‑level array.
 
 ```sql
 -- Search for an integer value in a JSON path
@@ -830,3 +977,12 @@ SELECT Found =
 
 GO
 ```
+
+**Notes & tips:**
+- `JSON_CONTAINS` compares using JSON semantics—number vs string types are distinct.
+- Paths with wildcards (`[*]`) search across all array elements; combine with dotted paths to inspect nested structures.
+- For complex containment (e.g., “object with specific subset of properties”), use a JSON literal as the second argument (not just a scalar).
+
+---
+
+**End of Lab** — You’ve exercised SQL Server 2025’s new JSON data type, in‑place modify semantics, JSON indexes, richer path expressions for arrays, JSON aggregates, typed extraction via `RETURNING`, and semantic containment via `JSON_CONTAINS`. These features collectively reduce schema scaffolding and make JSON data truly first‑class in SQL.

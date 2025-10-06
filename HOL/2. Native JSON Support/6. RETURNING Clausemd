@@ -1,0 +1,19 @@
+﻿## Type-Safe Extraction with `RETURNING` Clause
+
+The `RETURNING` clause on `JSON_VALUE` lets you specify a SQL type for the extracted scalar—improving correctness and plan quality compared with wrapping the function in an external `CAST/CONVERT`. It is **ANSI‑compliant** and avoids surprises with string comparisons.
+
+**Why this matters:** `JSON_VALUE` traditionally returns `nvarchar(4000)`. Comparing that to a number uses string semantics (e.g., `'100' < '9'`). You must coerce to a numeric type to get proper numeric comparisons. `RETURNING` bakes the coercion into the extraction.
+
+**What the script shows:** The first statement (guarded by `IF 1=0`) illustrates the kind of comparison that would fail. The second demonstrates explicit `CAST`. The third uses `RETURNING` for stronger typing. (Note: In preview builds, `RETURNING` may be limited to integer types.)
+
+```sql
+-- Throws error because the JSON_VALUE function return nvarchar by default, and so the numeric > operator fails
+IF 1 = 0
+    SELECT * FROM Customer WHERE JSON_VALUE(CustomerJson, '$.balance') > 50.5
+
+-- Convert nvarchar to money data type using CAST or CONVERT
+SELECT * FROM Customer WHERE CAST(JSON_VALUE(CustomerJson, '$.balance') AS money) > 50.5
+
+-- Now we can use the (ANSI-compliant) RETURNING clause, but only for integer types
+SELECT * FROM Customer WHERE JSON_VALUE(CustomerJson, '$.balance' RETURNING int) > 50
+```
