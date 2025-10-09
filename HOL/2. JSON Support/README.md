@@ -6,12 +6,11 @@ This hands-on lab walks you through the new JSON features introduced in SQL Serv
 
 * Native `json` data type
 * In-place updates using the `.modify()` method
-* JSON path indexing with `CREATE JSON INDEX`
+* The new `RETURNING` clause for type-safe extraction with `JSON_VALUE`
+* Native JSON indexes `CREATE JSON INDEX`
 * JSON path expression array enhancements
 * JSON aggregates
-* The new `RETURNING` clause for type-safe extraction with `JSON_VALUE`
 * The new `JSON_CONTAINS` function for containment checks
-
 
 ___
 
