@@ -15,7 +15,7 @@ Before starting, ensure you have the necessary software installed. Specifically,
     - Download SSMS from:  
 [https://aka.ms/ssms/21/release/vs_SSMS.exe](https://aka.ms/ssms/21/release/vs_SSMS.exe)
 
-3. **Visual Studio 2022**
+2. **Visual Studio 2022**
 
    Visual Studio 2022 is required for the Change Event Streaming labs.
  
