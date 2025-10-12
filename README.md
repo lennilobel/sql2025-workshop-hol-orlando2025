@@ -1,43 +1,41 @@
 ﻿# Data Platform Live! Orlando 2025
 
-### Hands-On Lab — Building Modern Applications with SQL Server 2025: AI and New Developer Features
-
 Welcome!
+
+## Hands-On Lab — Building Modern Applications with SQL Server 2025: AI and New Developer Features
 
 Before diving into the hands-on labs, ensure you have the necessary software and sample database installed. Follow the steps below to prepare your environment.
 
-1. **SQL Server 2025**
+## SQL Server 2025
 
    A local or cloud-hosted instance of **SQL Server 2025** is required for the labs. You have three options:
 
-    - **Option 1: Local installation on Windows**  
+  **Option 1 — Local installation on Windows**  
 
-      - Download SQL Server 2025 Developer Edition (free) from: [https://info.microsoft.com/ww-landing-sql-server-2025.html](https://info.microsoft.com/ww-landing-sql-server-2025.html)  
-      
-        - Direct download: https://www.microsoft.com/en-us/evalcenter/sql-server-2025-download
+  - Download SQL Server 2025 Developer Edition (free) from [https://info.microsoft.com/ww-landing-sql-server-2025.html](https://info.microsoft.com/ww-landing-sql-server-2025.html) or from the direct download link at https://www.microsoft.com/en-us/evalcenter/sql-server-2025-download.
 
-      - Choose the **Basic** option when the installer starts.
+- Choose the **Basic** option when the installer starts.
 
-    - **Option 2: Local installation with Docker (Linux Container on Windows)**
+**Option 2 — Local installation with Docker (Linux Container on Windows)**
     
-      - Pull the latest SQL Server 2025 container image:
+  - Pull the latest SQL Server 2025 container image:
       
-        ```powershell
-        docker pull mcr.microsoft.com/mssql/server:2025-latest
-        ```
+    ```powershell
+    docker pull mcr.microsoft.com/mssql/server:2025-latest
+    ```
 
-    - **Option 3: Azure SQL Database**  
+**Option 3 — Azure SQL Database**  
     
-      - Alternatively, you may use an Azure SQL Database if you prefer a cloud-hosted environment and you have an Azure subscription. All labs are compatible.
+- Alternatively, you may use an Azure SQL Database if you prefer a cloud-hosted environment and you have an Azure subscription. All labs are compatible.
 
-2. **SQL Server Management Studio (SSMS) 21**
+## SQL Server Management Studio (SSMS) 21
 
-   To interact with SQL Server, including running queries and managing databases, install the latest version of SSMS.
+To interact with SQL Server, including running queries and managing databases, install the latest version of SSMS.
 
-    - Download SSMS from:  
-[https://aka.ms/ssms/21/release/vs_SSMS.exe](https://aka.ms/ssms/21/release/vs_SSMS.exe)
+- Download SSMS from:
+[https://aka.ms/ssms/21/release/vs_SSMS.exe](https://aka.ms/ssms/21/release/vs_SSMS.exe).
 
-3. **Visual Studio 2022 (any edition)**
+## Visual Studio 2022 (any edition)
 
    Visual Studio 2022 is required for the Change Event Streaming labs.
  
@@ -45,111 +43,99 @@ Before diving into the hands-on labs, ensure you have the necessary software and
 
    If you don't already have Visual Studio 2022 installed on your machine:
 
-    - Download the **Community Edition** (free) from:  
-  [https://visualstudio.microsoft.com/vs/community/](https://visualstudio.microsoft.com/vs/community/)
+  - Download the **Community Edition** (free) from [https://visualstudio.microsoft.com/vs/community/](https://visualstudio.microsoft.com/vs/community/).
 
-    - During installation, select the **.NET Desktop Development** workload.
+- During installation, select the **.NET Desktop Development** workload.
 
-4. **AdventureWorks2022 Database**
- 
-   Many labs utilize the AdventureWorks2022 sample database. 
+## AdventureWorks2022 Database
 
-    * **Option 1: SQL Server 2025 on Windows**
+Many labs utilize the AdventureWorks2022 sample database. 
 
-      If you're running SQL Server 2025 directly on Windows:
+**Option 1 — SQL Server 2025 on Windows**
 
-      * **Download the backup file:**
-      
-        Download the `AventureWorks2022.bak` backup file available [here](https://1drv.ms/f/s!AiiTRkT0Yvc4xd8Kz1oSgzjbselEIA?e=yFaqjc) (right-click and open in a new tab)
+If you're running SQL Server 2025 directly on Windows:
 
-      * **Create a folder:**  
-        
-        Create a folder on your C: drive called `C:\HolDB`.
+1. Download the `AventureWorks2022.bak` backup file available [here](https://1drv.ms/f/s!AiiTRkT0Yvc4xd8Kz1oSgzjbselEIA?e=yFaqjc) (right-click and open in a new tab).
 
-      * **Copy the backup file:**  
-        
-        Move `AdventureWorks2022.bak` from your Downloads folder into `C:\HolDB`.
+2. Create a folder on your C: drive called `C:\HolDB`.
 
-      * **Restore in SSMS:**
-           - Launch SSMS and connect to your local SQL Server instance.
-           - Right-click on **Databases** and choose **Restore Database...**
-           - Select **Device**, click `...`, then click **Add**.
-           - Navigate to `C:\HolDB`, select the `.bak` file, and click **OK** twice.
-           - Click **OK** once more to start the restore.
+3. Move or copy `AdventureWorks2022.bak` from your Downloads folder into `C:\HolDB`.
 
-    * **Option 2: SQL Server 2025 with Docker (Linux Container on Windows)**
+4. Restore in SSMS.
 
-      If you're using SQL Server 2025 inside a Linux-based Docker container on Windows:
+   - Launch SSMS and connect to your local SQL Server instance.
+   - Right-click on **Databases** and choose **Restore Database...**
+   - Select **Device**, click `...`, then click **Add**.
+   - Navigate to `C:\HolDB`, select the `.bak` file, and click **OK** twice.
+   - Click **OK** once more to start the restore.
 
-      * **Download the backup file:**
-      
-        Download the `AventureWorks2022.bak` backup file available [here](https://1drv.ms/f/s!AiiTRkT0Yvc4xd8Kz1oSgzjbselEIA?e=yFaqjc) (right-click and open in a new tab)
+**Option 2 — SQL Server 2025 with Docker (Linux Container on Windows)**
 
-      * **Create a shared folder:**  
+If you're running SQL Server 2025 inside a Linux-based container using Docker on Windows:
 
-        Create a host folder (e.g., `C:\Temp`) and copy `AdventureWorks2022.bak` into it.
+1. Download the `AventureWorks2022.bak` backup file available [here](https://1drv.ms/f/s!AiiTRkT0Yvc4xd8Kz1oSgzjbselEIA?e=yFaqjc) (right-click and open in a new tab).
 
-      * **Start the SQL Server container:**
-        ```powershell
-        docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=<your-sa-password>" -p 1433:1433 -v C:\Temp:/var/opt/mssql/backup --name sql2025 -d mcr.microsoft.com/mssql/server:2025-latest
-        ```
+2. Create a host folder (e.g., `C:\Temp`) and move or copy `AdventureWorks2022.bak` into it.
 
-      * **Restore in SSMS:**
+3. Start the SQL Server container with a volume mapping from `C:\Temp` to `/var/opt/mssql/backup`:
 
-        - Launch SSMS.
-        - Connect to `localhost,1433`.
-        - Right-click on **Databases** and choose **Restore Database...**
-        - Select **Device**, click `...`, then click **Add**.
-        - Navigate to `/var/opt/mssql/backup/AdventureWorks2022.bak`
-        - Click **OK** twice to return to the main restore dialog.
-        - Click **OK** to begin the restore.
+    ```powershell
+    docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=<your-sa-password>" -p 1433:1433 -v C:\Temp:/var/opt/mssql/backup --name sql2025 -d mcr.microsoft.com/mssql/server:2025-latest
+    ```
 
-      * **Alternatively, restore using T-SQL:**
+4. Restore in SSMS.
 
-           ```sql
-           RESTORE DATABASE AdventureWorks2022
-           FROM DISK = N'/var/opt/mssql/backup/AdventureWorks2022.bak'
-           WITH MOVE 'AdventureWorks2022' TO '/var/opt/mssql/data/AdventureWorks2022.mdf',
-                MOVE 'AdventureWorks2022_log' TO '/var/opt/mssql/data/AdventureWorks2022_log.ldf';
-           ```
+    - Launch SSMS.
+    - Connect to `localhost,1433`.
+    - Use the GUI:
+      - Right-click on **Databases** and choose *Restore Database...**
+      - Select **Device**, click `...`, then click  *Add**.
+      - Navigate to `/var/opt/mssql/backup/AdventureWorks2022.bak`
+      - Click **OK** twice to return to the main estore     dialog.
+      - Click **OK** to begin the restore.
 
-    * **Option 3: Azure SQL Database**
+    - Alternatively, restore using T-SQL:
 
-      Azure SQL Database does **not** support restoring `.bak` files directly. To load **AdventureWorks2022**, follow these steps using a **DACPAC**:
+      ```sql
+      RESTORE DATABASE AdventureWorks2022
+      FROM DISK = '/var/opt/mssql/backup/AdventureWorks2022.bak'
+      WITH MOVE 'AdventureWorks2022' TO '/var/opt/mssql/data/AdventureWorks2022.mdf',
+           MOVE 'AdventureWorks2022_log' TO '/var/opt/mssql/data/dventureWorks2022_log.ldf'
+      ```
 
-        1. **Download the AdventureWorks2022 DACPAC**
+**Option 3 — Azure SQL Database**
 
-           * From the official Microsoft sample GitHub:
-             [https://github.com/microsoft/sql-server-samples/releases/tag/adventureworks](https://github.com/microsoft/sql-server-samples/releases/tag/adventureworks)
+Azure SQL Database does **not** support restoring `.bak` files directly. Instead, follow these steps to import **AdventureWorks2022** using a **BACPAC** file:
 
-           * Download the file named:
-             `AdventureWorks2022.bacpac`
-             *(Note: Sometimes DACPAC and BACPAC are both offered. You want the `.bacpac` file for Azure SQL.)*
+1. Navigate to the official Microsoft sample GitHub at [https://github.com/microsoft/sql-server-samples/releases/tag/adventureworks](https://github.com/microsoft/sql-server-samples/releases/tag/adventureworks) (right-click and open in a new tab).
 
-        2. **Create an Azure SQL Database**
+2. Download the file named `AdventureWorks2022.bacpac`.
+   > (Note: Sometimes DACPAC and BACPAC are both offered. You want the `.bacpac` file for Azure SQL.)
 
-           * In the [Azure Portal](https://portal.azure.com), create a new **Azure SQL Database** (Standard S1 or better is recommended).
-           * Choose an existing or new **SQL Server** resource, and create admin credentials.
+3. Create an Azure SQL Database.
 
-        3. **Import the BACPAC into Azure SQL Database**
+   * In the Azure Portal, create a new **Azure SQL Database** (Standard S1 or better is recommended).
+   * Choose an existing or new **SQL Server** resource, and create admin credentials.
 
-           * In the Azure Portal:
+4. **Import the BACPAC into Azure SQL Database**
 
-             * Go to your **SQL Server** resource.
-             * Under **Settings**, select **Import database**.
-             * For **Storage**, select the `.bacpac` file you downloaded earlier (you may need to upload it to a storage container first).
-             * Fill in the target database name, pricing tier, and credentials.
+   * In the Azure Portal:
 
-           * Alternatively, you can use **SQL Server Management Studio (SSMS)**:
+     * Go to your **SQL Server** resource.
+     * Under **Settings**, select **Import database**.
+     * For **Storage**, select the `.bacpac` file you downloaded earlier (you may need to upload it to a storage container first).
+     * Fill in the target database name, pricing tier, and credentials.
 
-             * Right-click on **Databases** > **Import Data-tier Application...**
-             * Follow the wizard to import the `.bacpac` into your Azure SQL Database.
+   * Alternatively, you can use **SQL Server Management Studio (SSMS)**:
 
-        4. **Connect to your Azure SQL Database in SSMS**
+     * Right-click on **Databases** > **Import Data-tier Application...**
+     * Follow the wizard to import the `.bacpac` into your Azure SQL Database.
 
-           * Use the **fully qualified server name** (e.g., `yourserver.database.windows.net`).
-           * Use the SQL admin login and password you created.
-           * You should now see the restored **AdventureWorks2022** database ready for use in the lab.
+4. **Connect to your Azure SQL Database in SSMS**
+
+   * Use the **fully qualified server name** (e.g., `yourserver.database.windows.net`).
+   * Use the SQL admin login and password you created.
+   * You should now see the restored **AdventureWorks2022** database ready for use in the lab.
 
 ---
 
