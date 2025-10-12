@@ -1,3 +1,0 @@
-﻿# Native JSON Support
-
-In this section, ...
