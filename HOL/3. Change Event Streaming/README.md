@@ -2,7 +2,7 @@
 
 This hands-on lab demonstrates the new **Change Event Streaming (CES)** feature in **SQL Server 2025**, which provides reliable, partitioned change events to **Azure Event Hubs**, enabling push-based integrations without polling or ETL jobs. You will:
 
-* Set up a database and configure it for CES.
+* Configure a database for CES.
 * Define a stream group and associate it with various tables.
 * Build a .NET consumer application to listen for and process changes.
 * Execute T-SQL operations that generate change events.
@@ -20,4 +20,3 @@ Separately, your instructor has also provided you with the SAS token and connect
 ___
 
 ▶ [Lab: Create the Sample CES Data Model](https://github.com/lennilobel/sql2025-workshop-hol-orlando2025/blob/main/HOL/3.%20Change%20Event%20Streaming/1.%20Create%20the%20Sample%20CES%20Database.md)
-
