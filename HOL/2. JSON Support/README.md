@@ -8,7 +8,7 @@ This hands-on lab walks you through the new JSON features introduced in SQL Serv
 * In-place updates using the `.modify()` method
 * Native JSON indexes `CREATE JSON INDEX`
 * JSON path expression array enhancements
-* JSON aggregates
+* JSON aggregates for building JSON arrays and objects across rows
 * The new `JSON_CONTAINS` function for containment checks
 
 ## JSON Formatter
