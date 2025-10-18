@@ -19,7 +19,9 @@ All required resources have been provisioned for you in Azure by your instructor
   * Azure OpenAI
 
 All registered attendees should have received an email with connection details for their Virtual Machine (VM), as well as the necessary credentials for accessing all other Azure resources. If you haven't received this email, please check with your instructor.
-	
+
+> **Note:** These labs target the RC1 preview version of SQL Server 2025. Although this release is stable enough for hands-on labs, some features may still be in preview and subject to change in the final release.
+
 ## You're all set
 
 Ready to dive in?
