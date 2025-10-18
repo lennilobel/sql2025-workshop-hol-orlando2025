@@ -17,11 +17,12 @@ SQL Server Management Studio (SSMS) displays raw JSON that can be hard to read. 
 
 ### Try it out
 
-* Point your browser to the JSON Formatter tool at https://www.toptal.com/developers/json-formatter.
-* Copy the following JSON string and paste it into the input box on the JSON Formatter page:
+* Copy the following JSON string:
    ```json
    {"name":"John","age":30,"city":"New York","hobbies":["reading","traveling","swimming"]}
    ```
+* Point your browser to the JSON Formatter tool at <a href="https://www.toptal.com/developers/json-formatter" target="_blank">https://www.toptal.com/developers/json-formatter</a>.
+* Paste the JSON string into the input box on the JSON Formatter page
 * Observe how the tool formats the JSON string into a more readable structure.
 
 It's recommended that you keep this tool open in a separate browser tab while working through the JSON labs for easy access to format and view JSON data.
