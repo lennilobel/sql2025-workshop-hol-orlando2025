@@ -17,7 +17,7 @@ SQL Server Management Studio (SSMS) displays raw JSON that can be hard to read. 
 
 ### Try it out
 
-* Right-click https://www.toptal.com/developers/json-formatter and choose **Open link in new tab**.
+* Right-click https://jsonformatter.org and choose **Open link in new tab**.
 * Copy the following JSON string and paste it into the input box on the JSON Formatter page opened in the new tab:
    ```json
    {"name":"John","age":30,"city":"New York","hobbies":["reading","traveling","swimming"]}
