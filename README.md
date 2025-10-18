@@ -2,35 +2,26 @@
 
 Welcome!
 
-Get ready to dive into the exciting new features of SQL Server 2025, including AI integration and enhanced developer capabilities. This hands-on lab will guide you through practical exercises to help you understand and leverage these new functionalities.
+Get ready to dive into the exciting new features of SQL Server 2025, including AI integration and enhanced developer capabilities. These hands-on labs will guide you through practical exercises to help you understand and leverage these new functionalities.
 
-## Prerequisites
+## Lab Resources
 
-Before starting, ensure you have the necessary software installed. Specifically, you'll need **SQL Server Management Studio (SSMS)** and **Visual Studio 2022 (any edition)** to work through the labs.
+All required resources have been provisioned for you in Azure by your instructor. This includes:
 
-1. **SQL Server Management Studio 21**
-
-   To interact with SQL Server 2025 / Azure SQL Database, including running queries and managing databases, install the latest version of SSMS.
-
-    - Download SSMS from:  
-[https://aka.ms/ssms/21/release/vs_SSMS.exe](https://aka.ms/ssms/21/release/vs_SSMS.exe)
-
-2. **Visual Studio 2022**
-
-   Visual Studio 2022 is required for the Change Event Streaming labs.
- 
-   If you already have Visual Studio 2022 installed on your machine, be sure that you have chosen the **.NET Desktop Development** workload during installation. You can confirm this from the Visual Studio Installer (and add the workload if necessary).
-
-   If you don't already have Visual Studio 2022 installed on your machine:
-
-  - Download the **Community Edition** (free) from [https://visualstudio.microsoft.com/vs/community/](https://visualstudio.microsoft.com/vs/community/).
-
-- During installation, select the **.NET Desktop Development** workload.
+* Windows 11 Virtual Machine
+  * SQL Server 2025 Release Candidate 1 (RC1)
+  * SQL Server Management Studio (SSMS) 21
+  * Visual Studio 2022
+* For the Change Event Streaming labs:
+  * Azure Event Hubs Namespace and Event Hub
+  * Azure Storage Account
+* For the AI labs:
+  * Azure OpenAI
 
 
+All registered attendees should have received an email with connection details for their Virtual Machine (VM), as well as the necessary credentials for accessing all other Azure resources. If you haven't received this email, please check with your instructor.
+	
 ## You're all set
-
-All other required resources have been provisioned for you in Azure by your instructor. This includes an Azure SQL Database instance (functionally equivalent to SQL Server 2025). Details for accessing these resources have been emailed to each registered attendee in advance of the workshop.
 
 Ready to dive in?
 
