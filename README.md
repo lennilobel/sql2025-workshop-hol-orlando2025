@@ -8,7 +8,7 @@ Get ready to dive into the exciting new features of SQL Server 2025, including A
 
 All required resources have been provisioned for you in Azure by your instructor. This includes:
 
-* Windows 11 Virtual Machine
+* Windows 11 Virtual Machine with:
   * SQL Server 2025 Release Candidate 1 (RC1)
   * SQL Server Management Studio (SSMS) 21
   * Visual Studio 2022
@@ -17,7 +17,6 @@ All required resources have been provisioned for you in Azure by your instructor
   * Azure Storage Account
 * For the AI labs:
   * Azure OpenAI
-
 
 All registered attendees should have received an email with connection details for their Virtual Machine (VM), as well as the necessary credentials for accessing all other Azure resources. If you haven't received this email, please check with your instructor.
 	
