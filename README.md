@@ -10,8 +10,8 @@ All required resources have been provisioned for you in Azure by your instructor
 
 * Windows 11 Virtual Machine (VM) with:
   * SQL Server 2025 Release Candidate 1 (RC1)
-  * SQL Server Management Studio (SSMS) 21
-  * Visual Studio 2022
+  * SQL Server Management Studio (SSMS) 22
+  * Visual Studio 2026 Community Edition
   * AdventureWorks2022 sample database
 * For the Change Event Streaming labs:
   * Azure Event Hubs Namespace and Event Hub
